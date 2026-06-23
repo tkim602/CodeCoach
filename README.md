@@ -68,8 +68,8 @@ Users can set a time limit for a problem, such as 30, 60, 90, 120 minutes, or a 
 
 CodeCoach is designed for:
 
-- [LeetCode](https://leetcode.com/)
-- [Programmers School](https://school.programmers.co.kr/)
+- [LeetCode](https://leetcode.com/problemset/)
+- [Programmers/프로그래머스](https://school.programmers.co.kr/learn/challenges?order=acceptance_desc&page=1)
 
 Support for additional coding-practice platforms may be added later.
 
