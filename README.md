@@ -202,7 +202,3 @@ An OpenAI API key can be added from the extension settings for AI features.
 CodeCoach is a practice tool, not an answer generator for active assessments. Its coaching prompts explicitly avoid complete accepted code by default and disable assistance for contests, assessments, certifications, hiring tests, private tests, and similar evaluation settings.
 
 CodeCoach is an independent project and is not affiliated with LeetCode, Programmers, OpenAI, Google, or their parent companies.
-
-## Author
-
-Built by [TaeHo Kim](https://github.com/tkim602).
