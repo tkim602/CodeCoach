@@ -82,8 +82,6 @@ Repeated learning signals are aggregated into the History view so the user can s
 
 Problems can be added to a review schedule based on their result and study history. Review items can be completed, postponed, or removed, and failed attempts receive higher review priority than routine successful attempts.
 
-![CodeCoach review planner](docs/media/codecoach-review-planner.jpg)
-
 ### Timed practice
 
 A per-problem timer uses Chrome alarms and notifications so a practice session can be run under a fixed time limit without keeping the side panel open the entire time.
