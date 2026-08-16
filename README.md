@@ -7,8 +7,6 @@ The main design goal is to help with the next step without immediately giving aw
 **Published on the Chrome Web Store:** [Install CodeCoach](https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp)  
 **Privacy policy:** [CodeCoach Privacy Policy](https://tkim602.github.io/CodeCoach/privacy-policy.html)
 
-![CodeCoach running beside a LeetCode problem](docs/media/codecoach-hero.jpg)
-
 ## Why I built it
 
 General-purpose coding assistants are useful for finishing code, but that is not always what I want while preparing for coding interviews. If the assistant reveals the whole approach too early, the practice session becomes much less useful.
@@ -17,7 +15,7 @@ CodeCoach is built around a different interaction: read the code I have already 
 
 ## Demo
 
-**[Watch the full 2:17 CodeCoach demo](docs/media/codecoach-full-demo.mp4)**
+https://github.com/user-attachments/assets/68db64ee-7114-439c-8e25-372afb4f55c0
 
 The full walkthrough shows CodeCoach running on a real LeetCode problem, from contextual hints and debugging guidance through submission tracking and review features.
 
