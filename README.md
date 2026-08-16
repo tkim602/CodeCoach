@@ -7,11 +7,19 @@ The main design goal is to help with the next step without immediately giving aw
 **Published on the Chrome Web Store:** [Install CodeCoach](https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp)  
 **Privacy policy:** [CodeCoach Privacy Policy](https://tkim602.github.io/CodeCoach/privacy-policy.html)
 
+![CodeCoach running beside a LeetCode problem](docs/media/codecoach-hero.jpg)
+
 ## Why I built it
 
 General-purpose coding assistants are useful for finishing code, but that is not always what I want while preparing for coding interviews. If the assistant reveals the whole approach too early, the practice session becomes much less useful.
 
 CodeCoach is built around a different interaction: read the code I have already written, understand the current problem context, and give only as much help as I ask for. The extension then keeps track of the mistakes and topics that repeatedly show up so those problems can be reviewed later.
+
+## Demo
+
+![CodeCoach demo](docs/media/codecoach-demo.gif)
+
+CodeCoach reads the current editor state and visible problem context, provides progressively stronger hints, and turns practice results into review history.
 
 ## Practice flow
 
@@ -75,6 +83,8 @@ Repeated learning signals are aggregated into the History view so the user can s
 ### Review planner
 
 Problems can be added to a review schedule based on their result and study history. Review items can be completed, postponed, or removed, and failed attempts receive higher review priority than routine successful attempts.
+
+![CodeCoach review planner](docs/media/codecoach-review-planner.jpg)
 
 ### Timed practice
 
@@ -170,7 +180,7 @@ CodeCoach/
 │   ├── shared/          # prompts, storage, Firebase, taxonomy
 │   └── sidepanel/       # main product UI and feature controllers
 ├── assets/
-├── docs/                # GitHub Pages and privacy policy
+├── docs/                # GitHub Pages, privacy policy, demo media
 └── vendor/
 ```
 
