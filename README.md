@@ -5,7 +5,7 @@ CodeCoach is a Chrome extension for coding-interview practice on LeetCode and Pr
 The main design goal is to help with the next step without immediately giving away a complete solution.
 
 **Published on the Chrome Web Store:** [Install CodeCoach](https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp)  
-**Privacy policy:** [CodeCoach Privacy Policy](https://tkim602.github.io/CodeCoach-privacy/privacy-policy.html)
+**Privacy policy:** [CodeCoach Privacy Policy](https://tkim602.github.io/CodeCoach/privacy-policy.html)
 
 ## Why I built it
 
@@ -135,7 +135,7 @@ There is no CodeCoach-operated backend proxy for OpenAI requests. The user's API
 
 CodeCoach does not sell user data or use it for advertising. It does not run on arbitrary websites; host permissions are limited to supported coding-practice pages and the API endpoints required for OpenAI and optional Firebase features.
 
-The full data-handling description is maintained separately in the [privacy policy](https://tkim602.github.io/CodeCoach-privacy/privacy-policy.html).
+The full data-handling description is in the [privacy policy](https://tkim602.github.io/CodeCoach/privacy-policy.html), hosted from this repository.
 
 ## Supported platforms
 
@@ -170,6 +170,7 @@ CodeCoach/
 │   ├── shared/          # prompts, storage, Firebase, taxonomy
 │   └── sidepanel/       # main product UI and feature controllers
 ├── assets/
+├── docs/                # GitHub Pages and privacy policy
 └── vendor/
 ```
 
