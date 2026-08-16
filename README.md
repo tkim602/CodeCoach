@@ -1,192 +1,208 @@
 # CodeCoach
 
-CodeCoach is a Chrome extension that helps users practice coding interview problems more deliberately on LeetCode and Programmers. Instead of giving away full solutions, CodeCoach provides progressive hints, code analysis, debugging guidance, efficiency feedback, timed practice, and local weakness tracking.
+CodeCoach is a Chrome extension for coding-interview practice on LeetCode and Programmers. It adds progressive hints, debugging help, submission history, weakness tracking, and review scheduling directly beside the problem page.
 
-The goal is simple: help users learn how to solve problems, not just copy answers.
+The main design goal is to help with the next step without immediately giving away a complete solution.
 
----
+**Published on the Chrome Web Store:** [Install CodeCoach](https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp)  
+**Privacy policy:** [CodeCoach Privacy Policy](https://tkim602.github.io/CodeCoach-privacy/privacy-policy.html)
 
-## Features
+## Why I built it
 
-### Progressive AI Hints
+General-purpose coding assistants are useful for finishing code, but that is not always what I want while preparing for coding interviews. If the assistant reveals the whole approach too early, the practice session becomes much less useful.
 
-CodeCoach gives hints in controlled levels so users can choose how much help they want:
+CodeCoach is built around a different interaction: read the code I have already written, understand the current problem context, and give only as much help as I ask for. The extension then keeps track of the mistakes and topics that repeatedly show up so those problems can be reviewed later.
 
-- **Light Hint** — a small nudge without revealing the approach
-- **Direction Hint** — points toward the right algorithm or data structure
-- **Specific Hint** — gives a concrete next step while avoiding full answer code
+## Practice flow
 
-The assistant is designed to guide the user's thinking instead of immediately producing a complete solution.
+```mermaid
+flowchart LR
+    PAGE[LeetCode / Programmers problem]
+    CONTEXT[Problem + editor + run result context]
+    PANEL[CodeCoach side panel]
+    AI[Progressive AI feedback]
+    LEARNING[Hints / weakness tags / snapshots]
+    REVIEW[History + review queue]
 
-### Code Analysis
+    PAGE --> CONTEXT --> PANEL --> AI --> LEARNING --> REVIEW
+```
 
-Users can ask CodeCoach to review their current code and receive feedback on:
+The extension runs only on supported practice pages. It reads the visible problem context, current editor code, selected text, and visible run or submission result when those are needed for a feature.
 
-- logic mistakes
+## Core features
+
+### Progressive hints
+
+Hints have three levels so the user controls how much of the approach is revealed:
+
+- **Light hint** - a small nudge without naming the solution strategy
+- **Direction hint** - points toward the relevant algorithm, data structure, or reasoning shift
+- **Specific hint** - gives a concrete next step without returning a full accepted solution
+
+The no-full-solution behavior is enforced in two places. Prompt instructions restrict complete answer code, and the side panel also checks model metadata and generated output before displaying hint-style responses.
+
+### Code and debugging tools
+
+CodeCoach can work from the code currently open in the practice editor and provide:
+
+- full approach and complexity analysis
+- selected-line explanations
+- debugging help using visible errors or failing test output
+- next-code-step suggestions
+- before/after code comparison
+- wrong-answer study-note generation
+
+### Submission snapshots
+
+Visible pass/fail results can automatically create local code snapshots. Each snapshot records the current code, language, result state, elapsed practice time, and available run-result context.
+
+Duplicate result events are filtered so the same submission is not repeatedly stored when page events fire more than once.
+
+### Weakness tracking
+
+AI responses include structured learning metadata rather than only free-form text. CodeCoach records problem-type, caution-point, and implementation tags such as:
+
+- binary search boundaries
+- BFS / DFS traversal
+- sliding window
+- data-structure selection
 - edge cases
-- incorrect assumptions
-- readability issues
-- possible runtime errors
+- off-by-one mistakes
+- time and space complexity
 
-### Efficiency Feedback
+Repeated learning signals are aggregated into the History view so the user can see which topics keep causing trouble.
 
-CodeCoach can explain whether the current approach is efficient enough and suggest better strategies when needed, such as changing from brute force to hashing, sorting, two pointers, BFS/DFS, dynamic programming, or other common coding-test patterns.
+### Review planner
 
-### Weakness Tracking
+Problems can be added to a review schedule based on their result and study history. Review items can be completed, postponed, or removed, and failed attempts receive higher review priority than routine successful attempts.
 
-CodeCoach tracks learning patterns locally, including repeated weakness categories such as:
+### Timed practice
 
-- implementation mistakes
-- edge cases
-- time complexity
-- data structure choice
-- algorithm selection
-- debugging habits
+A per-problem timer uses Chrome alarms and notifications so a practice session can be run under a fixed time limit without keeping the side panel open the entire time.
 
-This helps users understand what they repeatedly struggle with across practice sessions.
+### Local history and export
 
-### Wrong-Answer Notes
+CodeCoach stores problem sessions, hint events, notes, code snapshots, review metadata, and learning events in Chrome extension storage. History can be searched and exported as Markdown for later review.
 
-After solving or reviewing a problem, users can save short learning notes so they can revisit mistakes later. The notes are meant to support review, not replace problem solving.
+## Engineering highlights
 
-### Debugging Lab
+### Working with real coding editors
 
-The Debugging Lab helps users inspect their current code more carefully. It can provide:
+LeetCode and Programmers do not expose the same editor or page structure. CodeCoach uses site-specific content scripts plus several editor fallbacks to recover the current source code and problem context.
 
-- line-level explanations
-- testcase-based reasoning
-- bug localization help
-- improvement suggestions
+The current implementation can inspect Monaco, Ace, CodeMirror, and regular textarea/DOM fallbacks when available. It also normalizes platform-specific run/submission states so the rest of the extension can work with one internal context format.
 
-### Timed Practice Mode
+### Streaming AI responses
 
-Users can set a time limit for a problem, such as 30, 60, 90, 120 minutes, or a custom time. This helps simulate real coding-test conditions.
+AI requests use the OpenAI Responses API with streaming enabled. The background service worker reads the SSE stream and forwards incremental output to the side panel so hints appear as they are generated instead of waiting for the full response.
 
----
+```mermaid
+flowchart LR
+    EDITOR[Current editor code]
+    PROBLEM[Visible problem context]
+    RESULT[Run / submission result]
 
-## Supported Platforms
+    EDITOR --> REQUEST[Context builder]
+    PROBLEM --> REQUEST
+    RESULT --> REQUEST
 
-CodeCoach is designed for:
+    REQUEST --> SW[Extension service worker]
+    SW --> OPENAI[OpenAI Responses API]
+    OPENAI -->|stream| SW
+    SW --> PANEL[Side panel]
+```
+
+### Learning metadata
+
+The assistant returns hidden structured metadata alongside the visible response. CodeCoach validates and normalizes those tags before storing them, which lets the extension build weakness summaries and review history without trying to infer everything later from raw chat text.
+
+### Local-first storage
+
+Cloud sync is **off by default**. The OpenAI API key, saved notes, code snapshots, settings, and study history are stored in `chrome.storage.local` unless the user enables an optional sync feature.
+
+Optional Firebase Authentication supports Google or email/password sign-in. When cloud sync is enabled, selected learning metadata such as hint events, weakness categories, review schedules, problem identifiers, and timestamps can be synchronized through Firestore. Saved code snapshots and wrong-answer note bodies remain local in the current release.
+
+## Privacy model
+
+CodeCoach uses a bring-your-own-key model for AI requests.
+
+```text
+Browser extension -> OpenAI API
+                 -> optional Firebase / Google services
+```
+
+There is no CodeCoach-operated backend proxy for OpenAI requests. The user's API key and request are sent from the extension directly to OpenAI over HTTPS, and OpenAI requests are made with `store: false` in the current implementation.
+
+CodeCoach does not sell user data or use it for advertising. It does not run on arbitrary websites; host permissions are limited to supported coding-practice pages and the API endpoints required for OpenAI and optional Firebase features.
+
+The full data-handling description is maintained separately in the [privacy policy](https://tkim602.github.io/CodeCoach-privacy/privacy-policy.html).
+
+## Supported platforms
 
 - [LeetCode](https://leetcode.com/problemset/)
-- [Programmers/프로그래머스](https://school.programmers.co.kr/learn/challenges?order=acceptance_desc&page=1)
+- [Programmers / 프로그래머스](https://school.programmers.co.kr/learn/challenges)
 
-Support for additional coding-practice platforms may be added later.
+The current Chrome Web Store release is version `1.0.0`.
 
----
-
-## Tech Stack
+## Tech stack
 
 - Chrome Extension Manifest V3
-- JavaScript / HTML / CSS
+- JavaScript, HTML, CSS
 - Chrome Side Panel API
 - Chrome Storage API
-- Chrome Notifications API
+- Chrome Scripting API
+- Chrome Alarms and Notifications APIs
+- Chrome Identity API
+- OpenAI Responses API
 - Firebase Authentication
-- AI model integration for hints, code review, and learning guidance
+- Firebase Firestore for optional metadata sync
 
----
+## Project structure
 
-## Project Structure
-
-```txt
+```text
 CodeCoach/
 ├── manifest.json
 ├── src/
-│   ├── background/
-│   ├── content/
-│   ├── sidepanel/
-│   ├── auth/
-│   ├── services/
-│   └── utils/
-├── icons/
-├── privacy-policy.html
-└── README.md
+│   ├── auth/            # sign-in UI
+│   ├── background/      # service worker, AI streaming, timers
+│   ├── content/         # LeetCode / Programmers page integration
+│   ├── options/         # extension settings
+│   ├── shared/          # prompts, storage, Firebase, taxonomy
+│   └── sidepanel/       # main product UI and feature controllers
+├── assets/
+└── vendor/
 ```
 
-The exact structure may vary depending on the release build.
+## Install
 
----
+### Chrome Web Store
 
-## Local Installation
+Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp).
 
-1. Clone the repository.
+### Local development
 
 ```bash
 git clone https://github.com/tkim602/CodeCoach.git
 cd CodeCoach
 ```
 
-2. Open Chrome and go to:
+Then:
 
-```txt
-chrome://extensions
-```
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Select **Load unpacked**.
+4. Choose the repository folder.
+5. Open a supported LeetCode or Programmers problem.
+6. Click the CodeCoach extension icon to open the side panel.
 
-3. Enable **Developer mode**.
+An OpenAI API key can be added from the extension settings for AI features.
 
-4. Click **Load unpacked**.
+## Scope
 
-5. Select the CodeCoach project folder.
+CodeCoach is a practice tool, not an answer generator for active assessments. Its coaching prompts explicitly avoid complete accepted code by default and disable assistance for contests, assessments, certifications, hiring tests, private tests, and similar evaluation settings.
 
-6. Open LeetCode or Programmers and launch the CodeCoach side panel.
-
----
-
-## Privacy and Data Handling
-
-CodeCoach is designed as a learning assistant with privacy-conscious defaults.
-
-- Learning statistics and weakness tracking are stored locally through Chrome storage.
-- CodeCoach does not intentionally sell user data.
-- CodeCoach does not use user data for advertising.
-- AI requests may include the user’s current question, selected code, and problem context when needed to generate a helpful response.
-- Authentication may be used to manage access and user sessions.
-- Sensitive credentials and API keys should never be committed to this repository.
-
-For more detail, see the project privacy policy.
-
----
-
-## Security Notes
-
-- Do not commit API keys, Firebase secrets, service account files, or private credentials.
-- Keep production configuration separate from public source code.
-- Review Chrome extension permissions carefully before publishing.
-- Use the minimum permissions required for the extension to work.
-
----
-
-## What CodeCoach Is Not
-
-CodeCoach is not intended to be an answer generator or cheating tool. Its purpose is to help users practice more effectively by giving structured guidance, feedback, and review support.
-
-Users are expected to write, test, and understand their own solutions.
-
----
-
-## Roadmap
-
-Planned improvements include:
-
-- better automatic question classification
-- more accurate weakness analysis from free-form chat
-- improved wrong-answer note organization
-- richer review summaries after each solved problem
-- better support for edge-case detection
-- cleaner UI/UX for long-term study tracking
-- optional cloud sync for users who want cross-device continuity
-
----
-
-## Disclaimer
-
-CodeCoach is an independent project and is not affiliated with LeetCode, Programmers, or their parent companies.
-
-Users should follow the terms and policies of each coding-practice platform they use.
-
----
+CodeCoach is an independent project and is not affiliated with LeetCode, Programmers, OpenAI, Google, or their parent companies.
 
 ## Author
 
-Created by [TaeHo Kim](https://github.com/tkim602).
+Built by [TaeHo Kim](https://github.com/tkim602).
