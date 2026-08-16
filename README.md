@@ -17,9 +17,9 @@ CodeCoach is built around a different interaction: read the code I have already 
 
 ## Demo
 
-![CodeCoach demo](docs/media/codecoach-demo.gif)
+**[Watch the full 2:17 CodeCoach demo](docs/media/codecoach-full-demo.mp4)**
 
-CodeCoach reads the current editor state and visible problem context, provides progressively stronger hints, and turns practice results into review history.
+The full walkthrough shows CodeCoach running on a real LeetCode problem, from contextual hints and debugging guidance through submission tracking and review features.
 
 ## Practice flow
 
