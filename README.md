@@ -15,7 +15,7 @@ CodeCoach is built around a different interaction: read the code I have already 
 
 ## Demo
 
-https://github.com/user-attachments/assets/68db64ee-7114-439c-8e25-372afb4f55c0
+https://github.com/user-attachments/assets/5a7c556c-070c-401c-8471-b8f38aa0eabf
 
 The full walkthrough shows CodeCoach running on a real LeetCode problem, from contextual hints and debugging guidance through submission tracking and review features.
 
