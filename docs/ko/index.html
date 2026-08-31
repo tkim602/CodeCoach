@@ -3,39 +3,173 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CodeCoach — 리트코드·프로그래머스 AI 코딩테스트 코치</title>
-  <meta name="description" content="리트코드와 프로그래머스에서 단계별 AI 힌트, 코드 리뷰, 디버깅, 오답 노트, 약점 추적을 제공하는 코딩테스트 연습 Chrome 확장 프로그램 CodeCoach.">
+  <title>CodeCoach — 리트코드·프로그래머스 힌트 코치</title>
+  <meta name="description" content="리트코드와 프로그래머스에서 정답을 바로 보지 않고 단계별 힌트, 코드 리뷰, 디버깅, 오답 기록, 약점 추적을 받을 수 있는 코딩테스트 연습 Chrome 확장 프로그램입니다.">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <link rel="canonical" href="https://tkim602.github.io/CodeCoach/ko/">
   <link rel="alternate" hreflang="en" href="https://tkim602.github.io/CodeCoach/">
   <link rel="alternate" hreflang="ko" href="https://tkim602.github.io/CodeCoach/ko/">
-  <meta property="og:title" content="CodeCoach — 리트코드·프로그래머스 AI 코딩테스트 코치">
-  <meta property="og:description" content="정답을 바로 보여주지 않고, 막힌 지점에서 필요한 만큼만 힌트를 주는 코딩테스트 연습 도구.">
-  <meta property="og:image" content="https://tkim602.github.io/CodeCoach/media/codecoach-hero.jpg">
-  <style>
-    :root{color-scheme:dark;--bg:#090d18;--surface:#111827;--text:#f7f8fb;--muted:#aeb8ca;--line:#29364d;--accent:#8b7cff;--max:980px}*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 50% -10%,#20294a 0,var(--bg) 43rem);color:var(--text);line-height:1.75}.wrap{width:min(calc(100% - 40px),var(--max));margin:0 auto}header{padding:24px 0}nav{display:flex;justify-content:space-between}a{color:inherit}.brand{font-weight:800;text-decoration:none}.lang{color:var(--muted);text-decoration:none}.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:42px;align-items:center;padding:72px 0}.eyebrow{color:#c0b9ff;font-size:13px;font-weight:800;letter-spacing:.08em}h1{font-size:clamp(42px,7vw,68px);line-height:1.08;letter-spacing:-.05em;margin:12px 0 18px}h2{font-size:34px;letter-spacing:-.035em}p{color:var(--muted)}.lead{font-size:19px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin:28px 0}.button{display:inline-flex;min-height:46px;padding:0 18px;align-items:center;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:750}.primary{background:var(--accent);border-color:var(--accent);color:#0b0f19}.hero img{border-radius:16px;border:1px solid var(--line)}section{padding:54px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.card{padding:22px;border:1px solid var(--line);border-radius:16px;background:rgba(17,24,39,.75)}.card h3{margin-top:0}.cta{text-align:center;padding:40px 24px;border:1px solid var(--line);border-radius:20px;background:rgba(17,24,39,.8)}footer{padding:32px 0 48px;color:var(--muted);font-size:13px}@media(max-width:760px){.hero,.grid{grid-template-columns:1fr}.hero{padding-top:42px}}
-  </style>
+  <link rel="alternate" hreflang="x-default" href="https://tkim602.github.io/CodeCoach/">
+  <link rel="stylesheet" href="../site.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CodeCoach — 리트코드·프로그래머스 힌트 코치">
+  <meta property="og:description" content="정답을 바로 보여주기보다, 막힌 지점에서 필요한 만큼만 도움을 받는 코딩테스트 연습 도구.">
+  <meta property="og:url" content="https://tkim602.github.io/CodeCoach/ko/">
+  <meta property="og:video" content="https://github.com/user-attachments/assets/5a7c556c-070c-401c-8471-b8f38aa0eabf">
+  <meta property="og:video:type" content="video/mp4">
 </head>
 <body>
-<header><div class="wrap"><nav><a class="brand" href="../">CodeCoach</a><a class="lang" href="../" hreflang="en">English</a></nav></div></header>
-<main>
-<section class="hero wrap">
-  <div>
-    <div class="eyebrow">AI 코딩테스트 연습 도구</div>
-    <h1>정답을 보기 전에, 필요한 힌트만.</h1>
-    <p class="lead">CodeCoach는 리트코드와 프로그래머스 문제 페이지에서 현재 코드와 문제 상황을 바탕으로 단계별 힌트, 디버깅 도움, 코드 리뷰를 제공하고 반복되는 실수를 약점으로 정리해 줍니다.</p>
-    <div class="actions"><a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">Chrome에 추가</a><a class="button" href="https://github.com/tkim602/CodeCoach">GitHub 보기</a></div>
-  </div>
-  <img src="../media/codecoach-hero.jpg" alt="리트코드 문제 옆에서 실행 중인 CodeCoach AI 코딩테스트 코치">
-</section>
-<section><div class="wrap"><div class="eyebrow">주요 기능</div><h2>코딩테스트 공부 흐름 자체를 개선합니다.</h2><div class="grid">
-  <div class="card"><h3>단계별 AI 힌트</h3><p>가벼운 힌트부터 알고리즘 방향, 구체적인 다음 단계까지 필요한 만큼만 확인합니다.</p></div>
-  <div class="card"><h3>코드 리뷰와 디버깅</h3><p>현재 작성한 코드, 시간복잡도, 엣지 케이스, 실패한 테스트 결과를 기준으로 문제점을 찾습니다.</p></div>
-  <div class="card"><h3>오답 및 약점 추적</h3><p>BFS/DFS, 이분 탐색 경계, off-by-one 같은 반복 실수를 누적해 어떤 부분을 복습해야 하는지 보여줍니다.</p></div>
-  <div class="card"><h3>복습 플래너</h3><p>틀린 문제를 저장하고 우선순위를 두어 무작정 새 문제만 푸는 대신 반복 학습 루프를 만듭니다.</p></div>
-</div></div></section>
-<section><div class="wrap"><div class="cta"><h2>다음 문제에서는 정답 검색 전에 힌트 하나만 받아보세요.</h2><p>CodeCoach는 시험·채용 평가용 답안 생성기가 아니라 리트코드와 프로그래머스 연습용 코치입니다.</p><a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">CodeCoach 설치</a></div></div></section>
-</main>
-<footer><div class="wrap">CodeCoach는 LeetCode, Programmers, OpenAI, Google과 제휴 관계가 없는 독립 프로젝트입니다. · <a href="../privacy-policy.html">Privacy</a></div></footer>
+  <header class="site-header">
+    <div class="wrap nav">
+      <a class="brand" href="../" aria-label="CodeCoach 홈"><span class="brand-mark" aria-hidden="true"></span>CodeCoach</a>
+      <nav class="nav-links" aria-label="주요 메뉴">
+        <a href="#features">기능</a>
+        <a href="#how">사용 방식</a>
+        <a href="#faq">FAQ</a>
+        <a class="lang" href="../" hreflang="en">English</a>
+        <a class="nav-cta" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">Chrome에 추가</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="kicker">코딩테스트 연습</div>
+      <h1>막혔을 때, 정답 말고 다음 한 걸음만.</h1>
+      <p class="hero-copy">CodeCoach는 현재 작성한 코드를 바탕으로 필요한 만큼만 힌트를 주고, 틀린 시도는 왜 틀렸는지 남겨 다시 같은 실수를 하지 않도록 돕습니다.</p>
+      <div class="actions">
+        <a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">CodeCoach 설치</a>
+        <a class="button" href="https://github.com/tkim602/CodeCoach">GitHub 보기</a>
+      </div>
+      <div class="micro">무료 Chrome 확장 프로그램 · LeetCode + 프로그래머스 · 개인 OpenAI API 키 사용</div>
+    </section>
+
+    <section class="demo wrap" aria-label="CodeCoach 데모">
+      <div class="demo-frame">
+        <video autoplay muted loop playsinline controls preload="metadata" aria-label="CodeCoach 사용 데모 영상">
+          <source src="https://github.com/user-attachments/assets/5a7c556c-070c-401c-8471-b8f38aa0eabf" type="video/mp4">
+          이 브라우저에서는 영상을 재생할 수 없습니다.
+        </video>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="wrap">
+        <div class="section-heading">
+          <div class="section-label">무엇을 해주나요</div>
+          <h2>정답을 검색하고 싶어지는 그 순간에 필요한 도움만 제공합니다.</h2>
+        </div>
+
+        <div class="feature-list">
+          <article class="feature">
+            <h3>단계별 힌트</h3>
+            <p>처음에는 작은 힌트부터 시작합니다. 부족할 때만 알고리즘 방향이나 더 구체적인 다음 단계를 확인할 수 있어, 어느 정도까지 볼지 직접 정할 수 있습니다.</p>
+          </article>
+          <article class="feature">
+            <h3>코드 리뷰와 디버깅</h3>
+            <p>이미 작성한 코드의 접근 방식, 시간·공간복잡도, 엣지 케이스, 런타임 오류, 실패한 테스트 결과를 기준으로 어디가 문제인지 확인합니다.</p>
+          </article>
+          <article class="feature">
+            <h3>오답 기록</h3>
+            <p>왜 틀렸는지, 무엇을 고쳤는지, 다음에 무엇을 기억해야 하는지를 짧게 남겨 한 번의 실패가 다음 문제에 도움이 되도록 만듭니다.</p>
+          </article>
+          <article class="feature">
+            <h3>약점 추적</h3>
+            <p>이분 탐색 경계, 그래프 탐색 순서, off-by-one 같은 반복되는 구현 실수를 모아 어떤 부분을 다시 연습해야 하는지 확인할 수 있습니다.</p>
+          </article>
+          <article class="feature">
+            <h3>복습 계획</h3>
+            <p>틀린 문제를 저장하고 맥락과 함께 다시 봅니다. 매일 새 문제를 더 푸는 것보다 같은 실수를 줄이는 데 초점을 둡니다.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <div class="wrap">
+        <div class="section-heading">
+          <div class="section-label">사용 방식</div>
+          <h2>문제 풀이의 핵심은 그대로 내가 합니다.</h2>
+        </div>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-number">01</div>
+            <strong>문제를 엽니다.</strong>
+            <p>LeetCode나 프로그래머스를 평소처럼 사용하면 됩니다.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-number">02</div>
+            <strong>먼저 직접 풀어봅니다.</strong>
+            <p>필요할 때 문제 내용, 현재 코드, 실행 또는 제출 결과를 바탕으로 도움을 받을 수 있습니다.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-number">03</div>
+            <strong>가장 작은 힌트부터 봅니다.</strong>
+            <p>이전 단계로 부족할 때만 더 구체적인 힌트로 넘어갑니다.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-number">04</div>
+            <strong>배운 내용을 남깁니다.</strong>
+            <p>실수 유형과 약점, 복습 항목을 저장해 다음 연습에 다시 사용합니다.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust">
+      <div class="wrap trust-grid">
+        <div>
+          <div class="section-label">Local-first</div>
+          <h2>학습 기록은 기본적으로 브라우저에 남습니다.</h2>
+        </div>
+        <p>OpenAI API 키, 저장한 코드 스냅샷, 오답 기록, 설정, 로컬 학습 기록은 브라우저에 저장됩니다. AI 요청은 본인의 API 키를 사용해 확장 프로그램에서 OpenAI로 직접 전송됩니다. 계정 및 학습 메타데이터 동기화는 직접 활성화한 경우에만 사용됩니다.</p>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="wrap">
+        <div class="section-heading">
+          <div class="section-label">FAQ</div>
+          <h2>설치 전에 궁금할 만한 것들.</h2>
+        </div>
+
+        <div class="faq-list">
+          <details>
+            <summary>LeetCode 정답 코드를 바로 보여주나요?</summary>
+            <p>기본 흐름은 완성된 정답 코드를 즉시 제공하기보다 단계적으로 도움을 주는 방식입니다. 어느 정도까지 힌트를 볼지는 직접 선택합니다.</p>
+          </details>
+          <details>
+            <summary>프로그래머스에서도 사용할 수 있나요?</summary>
+            <p>네. LeetCode와 프로그래머스 문제 페이지를 모두 지원합니다.</p>
+          </details>
+          <details>
+            <summary>OpenAI API 키가 필요한가요?</summary>
+            <p>AI 기능을 사용하려면 필요합니다. API 키는 브라우저에 로컬로 저장되며 요청은 OpenAI로 직접 전송됩니다.</p>
+          </details>
+          <details>
+            <summary>실제 코딩테스트나 채용 시험에서 사용해도 되나요?</summary>
+            <p>아니요. CodeCoach는 연습용 도구이며 진행 중인 대회, 자격시험, 채용 평가, 비공개 시험 등의 답안 작성 용도로 제공되지 않습니다.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta wrap">
+      <h2>다음 문제에서는 정답 검색 전에 힌트 하나만 받아보세요.</h2>
+      <p>LeetCode나 프로그래머스에서 직접 풀어보고, 정말 막힌 지점에서만 필요한 도움을 받으면 됩니다.</p>
+      <div class="actions">
+        <a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">CodeCoach 설치</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <div>CodeCoach는 LeetCode, Programmers, OpenAI, Google과 제휴 관계가 없는 독립 프로젝트입니다.</div>
+      <div class="footer-links"><a href="../privacy-policy.html">Privacy</a><a href="https://github.com/tkim602/CodeCoach">GitHub</a><a href="../" hreflang="en">English</a></div>
+    </div>
+  </footer>
 </body>
 </html>
