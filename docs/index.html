@@ -3,16 +3,250 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CodeCoach</title>
-  <meta http-equiv="refresh" content="0; url=privacy-policy.html">
+  <title>CodeCoach — AI LeetCode Tutor & Coding Interview Coach</title>
+  <meta name="description" content="Practice coding interviews on LeetCode and Programmers with progressive AI hints, code review, debugging help, wrong-answer notes, and weakness tracking.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://tkim602.github.io/CodeCoach/">
+  <link rel="alternate" hreflang="en" href="https://tkim602.github.io/CodeCoach/">
+  <link rel="alternate" hreflang="ko" href="https://tkim602.github.io/CodeCoach/ko/">
+  <link rel="alternate" hreflang="x-default" href="https://tkim602.github.io/CodeCoach/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CodeCoach — AI LeetCode Tutor & Coding Interview Coach">
+  <meta property="og:description" content="Progressive AI hints, code review, debugging help, and personalized weakness tracking inside LeetCode and Programmers.">
+  <meta property="og:url" content="https://tkim602.github.io/CodeCoach/">
+  <meta property="og:image" content="https://tkim602.github.io/CodeCoach/media/codecoach-hero.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CodeCoach — AI LeetCode Tutor & Coding Interview Coach">
+  <meta name="twitter:description" content="Get unstuck on coding interview problems without jumping straight to the full solution.">
+  <meta name="twitter:image" content="https://tkim602.github.io/CodeCoach/media/codecoach-hero.jpg">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CodeCoach",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "Chrome",
+    "browserRequirements": "Google Chrome 116 or later",
+    "description": "AI coding interview coach for LeetCode and Programmers with progressive hints, code review, debugging help, wrong-answer notes, and weakness tracking.",
+    "url": "https://tkim602.github.io/CodeCoach/",
+    "downloadUrl": "https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp",
+    "image": "https://tkim602.github.io/CodeCoach/media/codecoach-hero.jpg",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "sameAs": [
+      "https://github.com/tkim602/CodeCoach",
+      "https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp"
+    ]
+  }
+  </script>
+
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 48px auto; padding: 0 24px; line-height: 1.6; color: #1f2328; }
-    a { color: #5b4ee6; }
+    :root {
+      color-scheme: dark;
+      --bg: #090d18;
+      --surface: #111827;
+      --surface-2: #182234;
+      --text: #f7f8fb;
+      --muted: #aeb8ca;
+      --line: #29364d;
+      --accent: #8b7cff;
+      --accent-soft: #c0b9ff;
+      --max: 1080px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -10%, #20294a 0, var(--bg) 43rem);
+      line-height: 1.65;
+    }
+    a { color: inherit; }
+    img { display: block; max-width: 100%; }
+    .wrap { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+    header { padding: 24px 0; }
+    nav { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+    .brand { font-weight: 800; letter-spacing: -0.02em; text-decoration: none; }
+    .nav-links { display: flex; gap: 18px; align-items: center; color: var(--muted); font-size: 14px; }
+    .nav-links a { text-decoration: none; }
+    .hero { min-height: 660px; display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; padding: 60px 0 64px; }
+    .eyebrow { color: var(--accent-soft); font-size: 13px; font-weight: 800; letter-spacing: .10em; text-transform: uppercase; }
+    h1 { margin: 12px 0 18px; font-size: clamp(44px, 7vw, 74px); line-height: 1.01; letter-spacing: -0.055em; }
+    h2 { margin: 8px 0 12px; font-size: clamp(29px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.035em; }
+    h3 { margin: 0 0 8px; font-size: 19px; }
+    .lead { max-width: 700px; margin: 0; color: var(--muted); font-size: 19px; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0 14px; }
+    .button { display: inline-flex; min-height: 46px; padding: 0 18px; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; font-weight: 750; }
+    .button.primary { background: var(--accent); border-color: var(--accent); color: #0b0f19; }
+    .button.secondary { background: rgba(255,255,255,.03); }
+    .micro { color: var(--muted); font-size: 13px; }
+    .hero-card { padding: 10px; border: 1px solid var(--line); border-radius: 20px; background: rgba(17,24,39,.74); box-shadow: 0 28px 90px rgba(0,0,0,.30); }
+    .hero-card img { width: 100%; border-radius: 12px; }
+    section { padding: 64px 0; }
+    .section-copy { max-width: 760px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+    .card { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: rgba(17,24,39,.72); }
+    .card p { margin: 0; color: var(--muted); }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 38px; align-items: center; }
+    .steps { display: grid; gap: 16px; margin-top: 24px; counter-reset: step; }
+    .step { display: grid; grid-template-columns: 36px 1fr; gap: 12px; }
+    .step::before { counter-increment: step; content: counter(step); width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--accent-soft); font-weight: 800; }
+    .step strong { display: block; }
+    .step span { color: var(--muted); }
+    .feature-image { padding: 10px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+    details { padding: 18px 0; border-top: 1px solid var(--line); }
+    summary { cursor: pointer; font-weight: 750; }
+    details p { margin-bottom: 0; color: var(--muted); }
+    .cta { text-align: center; padding: 44px 28px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(180deg, rgba(139,124,255,.12), rgba(17,24,39,.78)); }
+    footer { padding: 30px 0 48px; color: var(--muted); font-size: 13px; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    footer a { color: var(--muted); }
+    @media (max-width: 840px) {
+      .hero, .split { grid-template-columns: 1fr; }
+      .hero { min-height: 0; padding-top: 44px; }
+      .grid { grid-template-columns: 1fr; }
+      .nav-links a:not(.lang) { display: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>CodeCoach</h1>
-  <p>This page hosts public documentation for the CodeCoach Chrome extension.</p>
-  <p><a href="privacy-policy.html">View the CodeCoach Privacy Policy</a></p>
+  <header>
+    <div class="wrap">
+      <nav aria-label="Primary navigation">
+        <a class="brand" href="./">CodeCoach</a>
+        <div class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#faq">FAQ</a>
+          <a class="lang" href="ko/" hreflang="ko">한국어</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div>
+        <div class="eyebrow">AI coding interview practice</div>
+        <h1>Get unstuck without giving up the solution.</h1>
+        <p class="lead">CodeCoach is an AI LeetCode tutor and coding interview coach that gives progressive hints, reviews your current code, helps debug failed attempts, and turns mistakes into a focused review plan. It also works on Programmers.</p>
+        <div class="actions">
+          <a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">Add CodeCoach to Chrome</a>
+          <a class="button secondary" href="https://github.com/tkim602/CodeCoach">View on GitHub</a>
+        </div>
+        <div class="micro">Free Chrome extension · Bring your own OpenAI API key · Local-first study history</div>
+      </div>
+      <div class="hero-card">
+        <img src="media/codecoach-hero.jpg" alt="CodeCoach AI coding interview coach open beside a coding practice problem" width="1280" height="800">
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <div class="eyebrow">Built for deliberate practice</div>
+        <h2>More useful than another answer generator.</h2>
+        <p class="section-copy">CodeCoach is designed for the moment when you are stuck but still want to solve the problem yourself. It reads the visible problem context and your current editor state, then gives only the level of help you request.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Progressive AI hints</h3>
+            <p>Choose a light nudge, an algorithm direction, or a specific next step without jumping straight to full accepted code.</p>
+          </article>
+          <article class="card">
+            <h3>Code review & debugging</h3>
+            <p>Review your approach, time and space complexity, edge cases, selected lines, runtime errors, and visible failed-test output.</p>
+          </article>
+          <article class="card">
+            <h3>Wrong-answer notes</h3>
+            <p>Turn a failed attempt into a structured study note so the mistake becomes something you can review instead of repeat.</p>
+          </article>
+          <article class="card">
+            <h3>Weakness tracking</h3>
+            <p>Track recurring algorithm patterns and implementation mistakes such as binary-search boundaries, traversal errors, and off-by-one bugs.</p>
+          </article>
+          <article class="card">
+            <h3>Review planner</h3>
+            <p>Save problems for later review, prioritize failed attempts, and build a repeatable interview-prep loop instead of an endless problem list.</p>
+          </article>
+          <article class="card">
+            <h3>LeetCode + Programmers</h3>
+            <p>Practice on LeetCode and Programmers / 프로그래머스 directly in the problem page with the same coaching workflow.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="wrap split">
+        <div>
+          <div class="eyebrow">How it works</div>
+          <h2>Keep the problem-solving work yours.</h2>
+          <div class="steps">
+            <div class="step"><div><strong>Open a supported problem.</strong><span>Use LeetCode or Programmers as you normally would.</span></div></div>
+            <div class="step"><div><strong>Write your own attempt first.</strong><span>CodeCoach can inspect the visible problem, editor code, and run or submission result when needed.</span></div></div>
+            <div class="step"><div><strong>Ask for the smallest useful hint.</strong><span>Increase the hint level only when you need more direction.</span></div></div>
+            <div class="step"><div><strong>Save what you learned.</strong><span>Track mistakes, weak patterns, code snapshots, notes, and review items for later practice.</span></div></div>
+          </div>
+        </div>
+        <div class="feature-image">
+          <img src="media/codecoach-review-planner.jpg" alt="CodeCoach review planner for revisiting coding interview problems and weak topics" width="1280" height="800" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="eyebrow">Local-first by default</div>
+        <h2>Your practice history stays under your control.</h2>
+        <p class="section-copy">Your OpenAI API key, saved code snapshots, wrong-answer notes, settings, and local study history are stored in your browser. AI requests go directly from the extension to OpenAI using your own API key. Optional account and learning-metadata sync is available only when you enable it.</p>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <div class="eyebrow">FAQ</div>
+        <h2>Questions before you install</h2>
+        <details>
+          <summary>Does CodeCoach give full LeetCode solutions?</summary>
+          <p>The coaching flow is built around progressive help instead of immediately returning a complete accepted solution. You control how much guidance is revealed.</p>
+        </details>
+        <details>
+          <summary>Does CodeCoach work on Programmers / 프로그래머스?</summary>
+          <p>Yes. CodeCoach supports both LeetCode and Programmers practice pages.</p>
+        </details>
+        <details>
+          <summary>Do I need an OpenAI API key?</summary>
+          <p>An OpenAI API key is required for AI-powered coaching features. The key is stored locally in your browser and requests are sent directly to OpenAI.</p>
+        </details>
+        <details>
+          <summary>Is CodeCoach intended for live coding assessments?</summary>
+          <p>No. CodeCoach is a practice tool and is not intended for active contests, certifications, hiring tests, private assessments, or similar evaluations.</p>
+        </details>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="cta">
+          <div class="eyebrow">Your next practice problem</div>
+          <h2>Try one hint before you look up the answer.</h2>
+          <p class="section-copy" style="margin:0 auto 22px">Install CodeCoach, open a LeetCode or Programmers problem, and keep the hard part of interview prep—the reasoning—in your hands.</p>
+          <a class="button primary" href="https://chromewebstore.google.com/detail/codecoach/ebbhlcklphnijoajejbpddlbdpaiphjp">Add to Chrome</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>CodeCoach is an independent project and is not affiliated with LeetCode, Programmers, OpenAI, or Google.</div>
+      <div><a href="privacy-policy.html">Privacy</a> · <a href="https://github.com/tkim602/CodeCoach">GitHub</a> · <a href="ko/" hreflang="ko">한국어</a></div>
+    </div>
+  </footer>
 </body>
 </html>
