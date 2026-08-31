@@ -110,17 +110,3 @@ Secondary:
 - 알고리즘 공부
 
 Do not keyword-stuff these phrases into the listing. Use them naturally where they accurately describe the product.
-
-## Initial growth target
-
-The first milestone is 100 active users, not merely 100 cumulative installs. Chrome Web Store ranking also considers quality signals such as ratings and downloads relative to uninstalls, so acquisition should prioritize users who actually practice coding interviews rather than broad low-intent traffic.
-
-Suggested first-100 distribution mix:
-
-- 25–35 users: Georgia Tech / CS student communities and personal network
-- 20–30 users: Korean coding-test communities using Programmers
-- 15–25 users: Reddit / LeetCode / interview-prep communities where self-promotion is allowed
-- 10–20 users: GitHub, portfolio, LinkedIn, and developer social posts
-- remainder: organic Chrome Web Store + Google search from the landing pages
-
-Ask for reviews only after users have successfully used the extension. Do not incentivize ratings.
