@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tkim602.github.io/CodeCoach/sitemap.xml

@@ -1,0 +1,6 @@
+{
+  "files": ["index.html", "ko/**/*.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

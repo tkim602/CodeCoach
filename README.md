@@ -176,7 +176,10 @@ CodeCoach/
 │   ├── shared/          # prompts, storage, Firebase, taxonomy
 │   └── sidepanel/       # main product UI and feature controllers
 ├── assets/
-├── docs/                # GitHub Pages, privacy policy, demo media
+├── landing/             # React + TypeScript landing page source
+├── index.html           # English landing entry
+├── ko/index.html        # Korean landing entry
+├── docs/                # generated GitHub Pages output and store docs
 └── vendor/
 ```
 
@@ -203,6 +206,23 @@ Then:
 6. Click the CodeCoach extension icon to open the side panel.
 
 An OpenAI API key can be added from the extension settings for AI features.
+
+### Landing page development
+
+The public English and Korean pages share one React + TypeScript application. Vite builds both routes into `docs/`, which keeps the existing GitHub Pages URLs unchanged.
+
+```bash
+npm install
+npm run dev
+```
+
+Before committing landing-page changes, regenerate the Pages output and run the checks:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
 
 ## Scope
 
