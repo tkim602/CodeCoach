@@ -53,6 +53,20 @@ export function createComposerController({
     appendUserMessage?.(text);
     startAssistantMessage?.();
     elements.chatInput.value = "";
+    dispatchFreeChat(text).catch(() => startChatRequest?.(text));
+  }
+
+  async function dispatchFreeChat(text) {
+    const settings = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" }).catch(() => null);
+    if (settings?.settings?.hasApiKey) {
+      startChatRequest?.(text);
+      return;
+    }
+    const guest = await chrome.runtime.sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null);
+    if (guest?.enabled && guest?.trial?.remaining !== 0) {
+      startAiRequest?.(REQUEST_KINDS.chatCoach, text);
+      return;
+    }
     startChatRequest?.(text);
   }
 
