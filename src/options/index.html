@@ -71,8 +71,6 @@
             <h2 class="settings-card-title">API Access</h2>
             <p class="muted">The API key is stored in extension storage and used directly by the extension service worker.</p>
           </div>
-
-          <!-- No key saved: show input field -->
           <div id="api-no-key-row" class="settings-row">
             <label class="field">
               <span>API key</span>
@@ -87,8 +85,6 @@
               </div>
             </label>
           </div>
-
-          <!-- Key saved: show masked display -->
           <div id="api-has-key-row" class="settings-row api-saved-row" hidden>
             <p class="api-saved-label">API key</p>
             <div class="api-key-display">
@@ -105,7 +101,6 @@
               <button id="api-key-replace" type="button">Replace</button>
             </div>
           </div>
-
           <div id="model-test-result" class="result-box" hidden></div>
         </section>
 
@@ -116,24 +111,9 @@
           </div>
           <datalist id="model-options"></datalist>
           <div class="grid">
-            <div class="settings-row">
-              <label class="field">
-                <span>Hint model</span>
-                <input id="hint-model" list="model-options" spellcheck="false">
-              </label>
-            </div>
-            <div class="settings-row">
-              <label class="field">
-                <span>Analysis model</span>
-                <input id="analyze-model" list="model-options" spellcheck="false">
-              </label>
-            </div>
-            <div class="settings-row">
-              <label class="field">
-                <span>Note model</span>
-                <input id="note-model" list="model-options" spellcheck="false">
-              </label>
-            </div>
+            <div class="settings-row"><label class="field"><span>Hint model</span><input id="hint-model" list="model-options" spellcheck="false"></label></div>
+            <div class="settings-row"><label class="field"><span>Analysis model</span><input id="analyze-model" list="model-options" spellcheck="false"></label></div>
+            <div class="settings-row"><label class="field"><span>Note model</span><input id="note-model" list="model-options" spellcheck="false"></label></div>
           </div>
         </section>
 
@@ -145,96 +125,32 @@
           <div class="settings-row">
             <label class="field">
               <span>Language</span>
-              <select id="ui-language">
-                <option value="ko">한국어</option>
-                <option value="en">English</option>
-              </select>
+              <select id="ui-language"><option value="ko">한국어</option><option value="en">English</option></select>
             </label>
           </div>
         </section>
 
         <section id="storage" class="section settings-card">
-          <div class="settings-card-header">
-            <h2 class="settings-card-title">Storage</h2>
-            <p class="muted">Choose what the extension includes in requests, keeps locally, and optionally syncs.</p>
-          </div>
+          <div class="settings-card-header"><h2 class="settings-card-title">Storage</h2><p class="muted">Choose what the extension includes in requests, keeps locally, and optionally syncs.</p></div>
           <div class="checks">
-            <label class="settings-row check-row">
-              <span>Confirm before AI requests</span>
-              <span class="toggle-switch">
-                <input id="confirm-before-ai" type="checkbox">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </span>
-            </label>
-            <label class="settings-row check-row">
-              <span>Include problem context by default</span>
-              <span class="toggle-switch">
-                <input id="include-problem-context" type="checkbox">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </span>
-            </label>
-            <label class="settings-row check-row">
-              <span>Include selection by default</span>
-              <span class="toggle-switch">
-                <input id="include-selection" type="checkbox">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </span>
-            </label>
-            <label class="settings-row check-row">
-              <span>Store full hint text locally</span>
-              <span class="toggle-switch">
-                <input id="store-hint-text" type="checkbox">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </span>
-            </label>
+            <label class="settings-row check-row"><span>Confirm before AI requests</span><span class="toggle-switch"><input id="confirm-before-ai" type="checkbox"><span class="toggle-track"><span class="toggle-thumb"></span></span></span></label>
+            <label class="settings-row check-row"><span>Include problem context by default</span><span class="toggle-switch"><input id="include-problem-context" type="checkbox"><span class="toggle-track"><span class="toggle-thumb"></span></span></span></label>
+            <label class="settings-row check-row"><span>Include selection by default</span><span class="toggle-switch"><input id="include-selection" type="checkbox"><span class="toggle-track"><span class="toggle-thumb"></span></span></span></label>
+            <label class="settings-row check-row"><span>Store full hint text locally</span><span class="toggle-switch"><input id="store-hint-text" type="checkbox"><span class="toggle-track"><span class="toggle-thumb"></span></span></span></label>
           </div>
         </section>
 
         <section id="guardrails" class="section settings-card notice">
-          <div class="settings-card-header">
-            <h2 class="settings-card-title">Guardrails</h2>
-            <p class="muted">The extension stays scoped to practice pages and avoids storing protected problem content.</p>
-          </div>
-          <div class="settings-row">
-            <p>This extension works on standard LeetCode and Programmers practice problems. It is disabled on contests, assessments, skill checks, certifications, mock interviews, hiring tests, editorials, and official solution pages.</p>
-          </div>
-          <div class="settings-row">
-            <p>Problem text, examples, constraints, screenshots, OCR text, page HTML, official explanations, and contest or assessment content are never stored.</p>
-          </div>
+          <div class="settings-card-header"><h2 class="settings-card-title">Guardrails</h2><p class="muted">The extension stays scoped to practice pages and avoids storing protected problem content.</p></div>
+          <div class="settings-row"><p>This extension works on standard LeetCode and Programmers practice problems. It is disabled on contests, assessments, skill checks, certifications, mock interviews, hiring tests, editorials, and official solution pages.</p></div>
+          <div class="settings-row"><p>Problem text, examples, constraints, screenshots, OCR text, page HTML, official explanations, and contest or assessment content are never stored.</p></div>
         </section>
 
         <section id="data-management" class="section settings-card">
-          <div class="settings-card-header">
-            <h2 class="settings-card-title">Data management</h2>
-            <p class="muted">Delete stored learning data or reset all extension data.</p>
-          </div>
-          <div class="settings-row action-row">
-            <div>
-              <strong>Learning data</strong>
-              <p>Delete local and synced sessions, hint history, and saved notes. Settings and API key are kept.</p>
-            </div>
-            <div class="button-row">
-              <button id="clear-learning" type="button">Delete learning data</button>
-            </div>
-          </div>
-          <div class="settings-row action-row">
-            <div>
-              <strong>API key</strong>
-              <p>Remove the saved OpenAI API key from local storage.</p>
-            </div>
-            <div class="button-row">
-              <button id="delete-key" class="danger" type="button">Remove key</button>
-            </div>
-          </div>
-          <div class="settings-row action-row">
-            <div>
-              <strong>All local data</strong>
-              <p>Delete all extension data including settings and API key. This cannot be undone.</p>
-            </div>
-            <div class="button-row">
-              <button id="clear-all" class="danger" type="button">Delete all local data</button>
-            </div>
-          </div>
+          <div class="settings-card-header"><h2 class="settings-card-title">Data management</h2><p class="muted">Delete stored learning data or reset all extension data.</p></div>
+          <div class="settings-row action-row"><div><strong>Learning data</strong><p>Delete local and synced sessions, hint history, and saved notes. Settings and API key are kept.</p></div><div class="button-row"><button id="clear-learning" type="button">Delete learning data</button></div></div>
+          <div class="settings-row action-row"><div><strong>API key</strong><p>Remove the saved OpenAI API key from local storage.</p></div><div class="button-row"><button id="delete-key" class="danger" type="button">Remove key</button></div></div>
+          <div class="settings-row action-row"><div><strong>All local data</strong><p>Delete all extension data including settings and API key. This cannot be undone.</p></div><div class="button-row"><button id="clear-all" class="danger" type="button">Delete all local data</button></div></div>
         </section>
 
         <footer class="footer">
@@ -250,13 +166,11 @@
       <section class="options-confirm-dialog">
         <h2 id="options-confirm-title">Confirm action</h2>
         <p id="options-confirm-message">This action cannot be undone.</p>
-        <div class="options-confirm-actions">
-          <button id="options-confirm-cancel" type="button">Cancel</button>
-          <button id="options-confirm-ok" class="danger" type="button">Confirm</button>
-        </div>
+        <div class="options-confirm-actions"><button id="options-confirm-cancel" type="button">Cancel</button><button id="options-confirm-ok" class="danger" type="button">Confirm</button></div>
       </section>
     </div>
 
     <script type="module" src="./options.js"></script>
+    <script type="module" src="./inline-nudge-setting.js"></script>
   </body>
 </html>
