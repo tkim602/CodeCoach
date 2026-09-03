@@ -17,7 +17,7 @@
     "tabs"
   ],
   "oauth2": {
-    "client_id": "714177801459-elt7l8cl35rbglvgl51loueu98ob6jms.apps.googleusercontent.com",
+    "client_id": "714177801459-elt7l8cl35rbgl51loueu98ob6jms.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
@@ -68,7 +68,8 @@
         "https://www.programmers.co.kr/learn/courses/*/lessons/*"
       ],
       "js": [
-        "src/content/monaco-bridge.js"
+        "src/content/monaco-bridge.js",
+        "src/content/inline-nudge-bridge.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -83,7 +84,7 @@
       ],
       "js": [
         "src/content/content-script.js",
-        "src/content/proactive-coach.js"
+        "src/content/inline-nudge.js"
       ],
       "run_at": "document_idle"
     }
