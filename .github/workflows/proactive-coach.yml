@@ -2,7 +2,7 @@ name: Proactive coach checks
 
 on:
   push:
-    branches: [proactive-coach]
+    branches: [proactive-coach, inline-nudge]
   pull_request:
     branches: [main]
 
@@ -26,6 +26,9 @@ jobs:
           node --check src/background/service-worker.js
           node --check src/shared/guest-auth.js
           node --check src/content/proactive-coach.js
+          node --check src/content/inline-nudge-bridge.js
+          node --check src/content/inline-nudge.js
+          node --check src/options/inline-nudge-setting.js
           node --check src/sidepanel/aiAccessMode.js
           node --check src/sidepanel/guest-onboarding.js
           node --check src/sidepanel/sidepanel.ai.js
