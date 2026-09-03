@@ -148,16 +148,27 @@
     }, "*");
   }
 
+  function isolateInteractiveEvents(root) {
+    const stop = (event) => event.stopPropagation();
+    ["pointerdown", "pointerup", "mousedown", "mouseup", "click", "dblclick", "keydown", "keyup", "keypress", "input", "change", "paste", "compositionstart", "compositionupdate", "compositionend"].forEach((type) => {
+      root.addEventListener(type, stop);
+    });
+  }
+
   function createNode(view) {
     const root = document.createElement("div");
     root.className = "codecoach-inline-native";
+    root.dataset.codecoachInlineUi = "1";
     root.style.cssText = [
       "box-sizing:border-box",
       "width:min(620px,calc(100% - 24px))",
       "margin:4px 12px 5px 8px",
       "font:12px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
-      "color:inherit"
+      "color:inherit",
+      "pointer-events:auto",
+      "user-select:text"
     ].join(";");
+    isolateInteractiveEvents(root);
 
     const shell = document.createElement("div");
     shell.style.cssText = [
@@ -168,7 +179,8 @@
       "padding:5px 8px",
       "border-left:2px solid " + ACCENT,
       "background:color-mix(in srgb," + ACCENT + " 7%,transparent)",
-      "border-radius:0 7px 7px 0"
+      "border-radius:0 7px 7px 0",
+      "pointer-events:auto"
     ].join(";");
 
     const mark = document.createElement("span");
@@ -194,8 +206,12 @@
       input.rows = 2;
       input.placeholder = view.inputPlaceholder || "";
       input.dataset.inlineInput = "1";
-      input.style.cssText = `display:block;width:min(520px,100%);margin-top:6px;resize:none;border:1px solid color-mix(in srgb,${ACCENT} 28%,#888);border-radius:6px;padding:5px 7px;background:transparent;color:inherit;font:inherit;outline:none`;
+      input.dataset.codecoachInlineUi = "1";
+      input.style.cssText = `display:block;width:min(520px,100%);margin-top:6px;resize:none;border:1px solid color-mix(in srgb,${ACCENT} 28%,#888);border-radius:6px;padding:5px 7px;background:transparent;color:inherit;font:inherit;outline:none;pointer-events:auto`;
       content.appendChild(input);
+      setTimeout(() => {
+        try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      }, 0);
     }
 
     const actions = document.createElement("div");
@@ -210,8 +226,8 @@
       button.type = "button";
       button.textContent = label;
       button.style.cssText = primary
-        ? `border:0;background:transparent;color:${ACCENT};padding:1px 0;font:600 12px/1.4 inherit;cursor:pointer`
-        : "border:0;background:transparent;color:inherit;opacity:.62;padding:1px 0;font:500 12px/1.4 inherit;cursor:pointer";
+        ? `border:0;background:transparent;color:${ACCENT};padding:1px 0;font:600 12px/1.4 inherit;cursor:pointer;pointer-events:auto`
+        : "border:0;background:transparent;color:inherit;opacity:.62;padding:1px 0;font:500 12px/1.4 inherit;cursor:pointer;pointer-events:auto";
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -235,10 +251,10 @@
   }
 
   function heightForView(view) {
-    if (view?.showInput) return 92;
-    if (view?.body && String(view.body).length > 180) return 78;
-    if (view?.body) return 62;
-    return 38;
+    if (view?.showInput) return 104;
+    if (view?.body && String(view.body).length > 180) return 82;
+    if (view?.body) return 66;
+    return 42;
   }
 
   function showInline(payload) {
@@ -253,10 +269,26 @@
     if (editorType === "monaco") {
       try {
         let zoneId = null;
+        const spacer = document.createElement("div");
+        spacer.style.pointerEvents = "none";
         editorRef.changeViewZones((accessor) => {
-          zoneId = accessor.addZone({ afterLineNumber: line, heightInPx: heightForView(view), domNode: node, suppressMouseDown: false });
+          zoneId = accessor.addZone({
+            afterLineNumber: line,
+            heightInPx: heightForView(view),
+            domNode: spacer,
+            suppressMouseDown: true
+          });
         });
-        nativeHandle = { type: "monaco", editor: editorRef, zoneId };
+        const widget = {
+          getId: () => "codecoach.inline.nudge",
+          getDomNode: () => node,
+          getPosition: () => ({
+            position: { lineNumber: Math.min(readLineCount(), line + 1), column: 1 },
+            preference: [window.monaco?.editor?.ContentWidgetPositionPreference?.ABOVE || 1]
+          })
+        };
+        editorRef.addContentWidget(widget);
+        nativeHandle = { type: "monaco", editor: editorRef, zoneId, widget };
         return;
       } catch {}
     }
@@ -318,8 +350,11 @@
 
   function hideInline() {
     try {
-      if (nativeHandle?.type === "monaco" && nativeHandle.zoneId) {
-        nativeHandle.editor.changeViewZones((accessor) => accessor.removeZone(nativeHandle.zoneId));
+      if (nativeHandle?.type === "monaco") {
+        if (nativeHandle.widget) nativeHandle.editor.removeContentWidget?.(nativeHandle.widget);
+        if (nativeHandle.zoneId) {
+          nativeHandle.editor.changeViewZones((accessor) => accessor.removeZone(nativeHandle.zoneId));
+        }
       } else if (nativeHandle?.type === "codemirror") {
         nativeHandle.widget?.clear?.();
       } else if (nativeHandle?.type === "ace") {
