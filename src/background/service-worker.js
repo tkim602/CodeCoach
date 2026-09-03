@@ -4,6 +4,7 @@ import { buildAnalyzeRequest, buildChatCoachRequest, buildCodeDiffRequest, build
 import { evaluateCodingPracticePage } from "../shared/pageRules.js";
 import { buildMarkdownExport } from "../shared/markdown.js";
 import { aggregateTaxonomyEvents } from "../shared/taxonomy/index.js";
+import { isCoachMessage, handleCoachMessage } from "./coach-router.js";
 import {
   addCodeSnapshot,
   addCoachThreadMessage,
@@ -108,6 +109,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
+  if (isCoachMessage(message)) return handleCoachMessage(message, sender);
+
   switch (message?.type) {
     case "GET_SETTINGS":
       return { ok: true, settings: await getPublicSettings() };
@@ -269,8 +272,6 @@ async function getActiveContext() {
 }
 
 async function saveDetectedSubmissionSnapshot(message) {
-  // Mark the eventId synchronously before any await to prevent races with
-  // maybeSaveContextResultSnapshot processing the same result concurrently.
   const eventId = getResultEventId(message);
   if (eventId && wasResultEventSaved(eventId)) {
     return { skipped: true, reason: "Duplicate result event." };
@@ -285,8 +286,6 @@ async function saveDetectedSubmissionSnapshot(message) {
   const context = message.context || {};
   const status = ["passed", "failed"].includes(message.status) ? message.status : "";
   const trimmedCode = context.code?.trim() || "";
-  // Require at least 10 non-whitespace characters so empty captures and stub
-  // skeletons (e.g. just a function signature without a body) are not saved.
   if (!status || !context.allowed || !context.problemUrl || trimmedCode.length < 10) {
     return { skipped: true, reason: "No valid submission snapshot." };
   }
