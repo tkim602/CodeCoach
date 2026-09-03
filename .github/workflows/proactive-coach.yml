@@ -1,0 +1,36 @@
+name: Proactive coach checks
+
+on:
+  push:
+    branches: [proactive-coach]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Check extension JavaScript syntax
+        run: |
+          node --check src/background/background.js
+          node --check src/background/coach-router.js
+          node --check src/background/service-worker.js
+          node --check src/shared/guest-auth.js
+          node --check src/content/proactive-coach.js
+          node --check src/sidepanel/guest-onboarding.js
+          node --check src/sidepanel/sidepanel.ai.js
+      - name: Test guest quota and cost policy
+        working-directory: functions
+        run: |
+          npm install --ignore-scripts --package-lock=false
+          npm test
