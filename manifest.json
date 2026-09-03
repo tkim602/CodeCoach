@@ -3,7 +3,7 @@
   "name": "CodeCoach – AI LeetCode Interview Coach",
   "short_name": "CodeCoach",
   "description": "AI coding interview coach with progressive hints, debugging, and weakness tracking for LeetCode and Programmers.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
@@ -37,7 +37,7 @@
     "https://us-central1-ai-hint-coach.cloudfunctions.net/*"
   ],
   "background": {
-    "service_worker": "src/background/background.js",
+    "service_worker": "src/background/service-worker.js",
     "type": "module"
   },
   "icons": {

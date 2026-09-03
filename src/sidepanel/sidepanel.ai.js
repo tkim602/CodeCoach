@@ -4,6 +4,7 @@ import { parseMarkedAiOutput, visiblePortionFromPartial } from "../shared/prompt
 import { normalizeTaxonomyMetadata } from "../shared/taxonomy/index.js";
 import { comparableSnapshotPair } from "./sidepanel.history.js";
 import { platformLabel } from "./sidepanel.utils.js";
+import { resolveAiMode } from "./aiAccessMode.js";
 
 export function createAiController({
   elements,
@@ -39,7 +40,7 @@ export function createAiController({
   async function startAiRequest(kind, userMessageText = "") {
     const state = getState();
     const aiMode = await resolveAiMode(state.settings, sendMessage);
-    if (!aiMode) {
+    if (aiMode === "none") {
       writeOutput(t("apiMissingAction"));
       setActiveStreamState("");
       return;
@@ -277,7 +278,7 @@ export function createAiController({
   async function startCodeDiffRequest(group) {
     const state = getState();
     const aiMode = await resolveAiMode(state.settings, sendMessage);
-    if (!aiMode) {
+    if (aiMode === "none") {
       writeOutput(t("apiMissingAction"));
       return;
     }
@@ -444,15 +445,6 @@ export function createAiController({
     startCodeDiffRequest,
     writeOutputForKind
   };
-}
-
-async function resolveAiMode(settings, sendMessage) {
-  if (settings?.hasApiKey) return "byok";
-  const response = await sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null);
-  if (!response?.enabled) return "";
-  const remaining = response.trial?.remaining;
-  if (remaining === 0) return "";
-  return "guest";
 }
 
 export function looksLikeFullCode(text) {

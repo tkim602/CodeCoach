@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { resolveAiAccessMode } from "../src/sidepanel/aiAccessMode.js";
 
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 
@@ -44,17 +45,36 @@ describe("extension AI access and privacy policy", () => {
 
   it("keeps proactive inline coaching quiet and progressive", () => {
     const proactive = read("src/content/proactive-coach.js");
+    expect(proactive).toContain("const STRINGS =");
+    expect(proactive).toContain("접근 방법이 어떻게 되나요?");
+    expect(proactive).toContain("What's your approach?");
     expect(proactive).toContain("const PLANNING_DELAY_MS = 35000");
     expect(proactive).toContain("ACTIVE_EDIT_SUPPRESS_MS");
     expect(proactive).toContain('result.status === "passed" && result.kind === "run"');
     expect(proactive).toContain('result.status === "passed" && result.kind === "submit"');
-    expect(proactive).toContain('activeReason === "close"');
+    expect(proactive).toContain("isPassivePromptReason");
     expect(proactive).toContain("isUsableCursor");
     expect(proactive).toContain("Open coach");
+    expect(proactive).toContain("코치 열기");
     expect(proactive).toContain('data-action="open"');
     expect(proactive).toContain("renderGuestStart");
     expect(proactive).toContain("Try free · 10 questions");
+    expect(proactive).toContain("무료로 시작 · 10회");
     expect(proactive).toContain("contains_solution_code");
     expect(proactive).toContain("looksLikeFullCode");
+  });
+
+  it("resolves AI access mode consistently", () => {
+    expect(resolveAiAccessMode({ hasApiKey: true }, { remaining: 8 })).toBe("byok");
+    expect(resolveAiAccessMode({ hasApiKey: false }, { remaining: 8 })).toBe("guest");
+    expect(resolveAiAccessMode({ hasApiKey: false }, { remaining: 0 })).toBe("none");
+    expect(resolveAiAccessMode({ hasApiKey: false }, null)).toBe("none");
+  });
+
+  it("routes composer chat through the shared AI controller so @code gating applies", () => {
+    const composer = read("src/sidepanel/sidepanel.composer.js");
+    expect(composer).toContain("startAiRequest?.(REQUEST_KINDS.chatCoach, text)");
+    expect(composer).not.toContain("dispatchFreeChat");
+    expect(composer).not.toContain("GET_GUEST_STATUS");
   });
 });

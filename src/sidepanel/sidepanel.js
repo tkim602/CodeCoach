@@ -57,11 +57,11 @@ import { createChatController } from "./sidepanel.chat.js";
 import { createComposerController } from "./sidepanel.composer.js";
 import { renderContextCards } from "./sidepanel.contextCards.js";
 import { mountSiderChatPanel } from "./sidepanel.shell.js";
-import { chatHistoryForContext } from "../shared/chatThreads.js";
 import { buildProblemTypeWeaknessItems, renderWeaknessRadar } from "./sidepanel.weakness.js";
 import { createCodeEditorController } from "./sidepanel.codeEditor.js";
 import { createDebugLabController } from "./sidepanel.debugLab.js";
 import { createConfirmController } from "./sidepanel.confirm.js";
+import { resolveAiAccessMode, resolveAiMode } from "./aiAccessMode.js";
 
 const TIMER_ALARM_PATH = "assets/alarm-clock-digital-bell-rings-brukowskij-2-2-00-02.mp3";
 
@@ -110,7 +110,8 @@ const state = {
   notePage: 1,
   editingNoteId: "",
   editingNoteReviewed: false,
-  privacyNoticeShowing: false
+  privacyNoticeShowing: false,
+  guestTrial: null
 };
 
 let _codeSelText = "";
@@ -287,7 +288,6 @@ function initShellControllers() {
   composerController = createComposerController({
     elements,
     startAiRequest,
-    startChatRequest,
     appendUserMessage: (text) => chatController?.appendUserMessage(text),
     startAssistantMessage: () => chatController?.startAssistantMessage(),
     t,
@@ -689,10 +689,11 @@ function syncCodeEditorScroll() {
 async function refreshAll() {
   setBusy(true);
   try {
-    const [settingsResponse, contextResponse, dataResponse] = await Promise.all([
+    const [settingsResponse, contextResponse, dataResponse, guestResponse] = await Promise.all([
       sendMessage({ type: "GET_SETTINGS" }),
       sendMessage({ type: "GET_ACTIVE_CONTEXT" }),
-      sendMessage({ type: "GET_LEARNING_DATA" })
+      sendMessage({ type: "GET_LEARNING_DATA" }),
+      sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null)
     ]);
 
     if (!settingsResponse.ok) throw new Error(settingsResponse.error);
@@ -702,12 +703,13 @@ async function refreshAll() {
     state.settings = settingsResponse.settings;
     state.context = contextResponse.context;
     state.learningData = dataResponse.data;
+    state.guestTrial = guestResponse?.enabled ? guestResponse.trial : null;
     state.lastContextSignature = contextSignature(state.context);
     state.lastContextUpdateAt = new Date().toISOString();
     hydrateContextFields(state.context);
     renderAll();
     await showFirstRunPrivacyNotice();
-    if (!state.settings?.hasApiKey && !state._onboardShown) {
+    if (!state.settings?.hasApiKey && resolveAiAccessMode(state.settings, state.guestTrial) === "none" && !state._onboardShown) {
       state._onboardShown = true;
       setTimeout(() => apiKeyController?.openApiKeyModal(), 400);
     }
@@ -762,8 +764,10 @@ function renderAll() {
   renderHintLevel();
   renderStatus();
   renderContextCards({ elements, context: state.context || {}, settings: state.settings || {}, t });
+  const aiAccessMode = resolveAiAccessMode(state.settings || {}, state.guestTrial);
   chatController?.setEmptyState({
-    apiConnected: Boolean(state.settings?.hasApiKey),
+    apiConnected: aiAccessMode !== "none",
+    aiAccessMode,
     allowed: Boolean(state.context?.allowed)
   });
   renderTimer();
@@ -829,15 +833,23 @@ function renderStatus() {
   const context = state.context || {};
   const settings = state.settings || {};
   const allowed = Boolean(context.allowed);
-  const hasKey = Boolean(settings.hasApiKey);
+  const aiAccessMode = resolveAiAccessMode(settings, state.guestTrial);
+  const hasAiAccess = aiAccessMode !== "none";
   const platformName = context.platformName || platformLabel(context.platform);
 
   elements.pageStatus.textContent = allowed ? `${platformName} ${t("detected")}` : t("disabled");
   if (elements.eligibilityPill) setPill(elements.eligibilityPill, allowed ? platformName : t("blocked"), allowed ? "ok" : "danger");
-  if (elements.apiPill) setPill(elements.apiPill, hasKey ? t("apiReady") : t("apiMissing"), hasKey ? "ok" : "warn");
+  if (elements.apiPill) {
+    const label = aiAccessMode === "byok"
+      ? t("apiReady")
+      : aiAccessMode === "guest"
+        ? t("guestAiReady")
+        : t("apiMissing");
+    setPill(elements.apiPill, label, hasAiAccess ? "ok" : "warn");
+  }
   elements.problemMeta.textContent = context.title || context.problemUrl || context.url || t("noPractice");
   const testResultStatus = formatTestResultStatus(context.testResults);
-  elements.syncState.textContent = !hasKey
+  elements.syncState.textContent = !hasAiAccess
     ? t("apiMissingAction")
     : testResultStatus ? `${t("latestTestResult")}: ${testResultStatus}` : "";
 
@@ -1891,71 +1903,9 @@ async function saveLearningSignal(learningSignal, userMessage) {
   }).catch(() => {});
 }
 
-async function startChatRequest(userMessage) {
-  if (!state.settings?.hasApiKey) {
-    writeOutput(t("apiMissingAction"));
-    return;
-  }
-
-  await syncActiveContext({ preserveUserEditedCode: false });
-  const context = buildCurrentContext();
-  if (!context.allowed) {
-    writeOutput(context.reason || t("needsPractice"));
-    return;
-  }
-  if (!context.code.trim()) {
-    writeOutput(t("noCode"));
-    return;
-  }
-
-  const requestId = crypto.randomUUID();
-  await saveCoachMessage({
-    role: "user",
-    kind: "chat",
-    text: userMessage,
-    context
-  });
-  state.activeRequest = {
-    requestId,
-    kind: REQUEST_KINDS.chatCoach,
-    rawText: "",
-    context,
-    userMessage
-  };
-  elements.metadataTags.innerHTML = "";
-  elements.output.innerHTML = "";
-  elements.output.classList.add("is-streaming");
-  elements.streamState.textContent = t("starting");
-  setBusy(true);
-
-  let response;
-  try {
-    response = await sendMessage({
-      type: "STREAM_AI",
-      requestId,
-      kind: REQUEST_KINDS.chatCoach,
-      context,
-      userMessage,
-      chatHistory: chatHistoryForContext(state.learningData?.coachThreads || [], context, { excludeKinds: ["debug_lab"] })
-    });
-  } catch (error) {
-    state.activeRequest = null;
-    setBusy(false);
-    elements.streamState.textContent = "";
-    writeOutput(error.message || String(error));
-    return;
-  }
-
-  if (!response.ok) {
-    state.activeRequest = null;
-    setBusy(false);
-    elements.streamState.textContent = "";
-    writeOutput(response.error);
-  }
-}
-
 async function startDebugLabRequest({ action = "free_chat", userMessage = "", testCases = [] } = {}) {
-  if (!state.settings?.hasApiKey) {
+  const aiMode = await resolveAiMode(state.settings, sendMessage);
+  if (aiMode === "none") {
     debugLabController?.setOutput(t("apiMissingAction"));
     debugLabController?.setStateText("");
     return;
@@ -1984,7 +1934,8 @@ async function startDebugLabRequest({ action = "free_chat", userMessage = "", te
     kind: REQUEST_KINDS.debugLab,
     debugAction: action,
     rawText: "",
-    context
+    context,
+    aiMode
   };
   debugLabController?.setOutput("");
   debugLabController?.setStateText(t("starting"));
@@ -1993,7 +1944,7 @@ async function startDebugLabRequest({ action = "free_chat", userMessage = "", te
   let response;
   try {
     response = await sendMessage({
-      type: "STREAM_AI",
+      type: aiMode === "guest" ? "STREAM_GUEST_AI" : "STREAM_AI",
       requestId,
       kind: REQUEST_KINDS.debugLab,
       context,

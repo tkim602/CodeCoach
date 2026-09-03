@@ -1,6 +1,7 @@
 const GUEST_STATUS_ID = "codecoach-guest-status";
 let guestTrial = null;
 let uiLanguage = "en";
+let hasApiKey = false;
 let suppressAutomaticModalOnce = false;
 
 bootGuestOnboarding().catch(() => {});
@@ -13,10 +14,13 @@ chrome.runtime.onMessage.addListener((message) => {
   return false;
 });
 
+chrome.storage?.local?.onChanged?.addListener(() => {
+  refreshSettings().then(renderGuestStatus).catch(() => {});
+});
+
 async function bootGuestOnboarding() {
   await domReady();
-  const settingsResponse = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" }).catch(() => null);
-  uiLanguage = settingsResponse?.settings?.uiLanguage === "ko" ? "ko" : "en";
+  await refreshSettings();
   installGuestChoice();
   const response = await chrome.runtime.sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null);
   if (response?.enabled) {
@@ -81,6 +85,12 @@ function renderGuestStatus() {
   const row = document.getElementById("composer-model-row") || document.querySelector(".coach-composer .panel-heading");
   if (!row) return;
   let badge = document.getElementById(GUEST_STATUS_ID);
+  if (hasApiKey) {
+    badge?.remove();
+    updateGuestChoice();
+    return;
+  }
+  if (!guestTrial) return;
   if (!badge) {
     badge = document.createElement("span");
     badge.id = GUEST_STATUS_ID;
@@ -91,8 +101,18 @@ function renderGuestStatus() {
   badge.textContent = remaining > 0 ? text("guestLeft", { remaining }) : text("guestUsedBadge");
   badge.classList.toggle("is-empty", remaining <= 0);
 
+  updateGuestChoice(remaining);
+}
+
+function updateGuestChoice(remaining = Number(guestTrial?.remaining)) {
   const button = document.getElementById("apikey-guest-continue");
   if (button) {
+    if (hasApiKey) {
+      button.disabled = true;
+      button.innerHTML = `<strong>${text("guestPaused")}</strong><span>${text("byokActive")}</span>`;
+      return;
+    }
+    remaining = Number.isFinite(Number(remaining)) ? Number(remaining) : 10;
     button.disabled = remaining <= 0;
     button.innerHTML = remaining > 0
       ? `<strong>${text("guestActive")}</strong><span>${text("guestCount", { remaining })}</span>`
@@ -100,7 +120,17 @@ function renderGuestStatus() {
   }
 
   const note = document.getElementById("apikey-guest-note");
-  if (note) note.textContent = remaining > 0 ? text("guestActiveNote", { remaining }) : text("guestUsedNote");
+  if (note) {
+    note.textContent = hasApiKey
+      ? text("byokActive")
+      : remaining > 0 ? text("guestActiveNote", { remaining }) : text("guestUsedNote");
+  }
+}
+
+async function refreshSettings() {
+  const settingsResponse = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" }).catch(() => null);
+  uiLanguage = settingsResponse?.settings?.uiLanguage === "ko" ? "ko" : "en";
+  hasApiKey = Boolean(settingsResponse?.settings?.hasApiKey);
 }
 
 function observeFirstRunModal() {
@@ -141,6 +171,8 @@ const STRINGS = {
     guestLeft: "Guest · {remaining} left",
     guestUsedBadge: "Guest trial used · add API key",
     guestActive: "Guest mode active",
+    guestPaused: "Guest mode paused",
+    byokActive: "Your API key is active",
     guestCount: "{remaining} of 10 AI questions left",
     guestUsed: "Guest trial used",
     connectKey: "Connect your OpenAI API key to continue",
@@ -158,6 +190,8 @@ const STRINGS = {
     guestLeft: "게스트 · {remaining}회 남음",
     guestUsedBadge: "게스트 체험 종료 · API key 연결",
     guestActive: "게스트 모드 사용 중",
+    guestPaused: "게스트 모드 대기 중",
+    byokActive: "현재 API key를 사용 중입니다",
     guestCount: "무료 AI 질문 {remaining}/10회 남음",
     guestUsed: "게스트 체험 종료",
     connectKey: "계속하려면 OpenAI API key를 연결하세요",

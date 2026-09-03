@@ -17,7 +17,8 @@ const {
   hashIp,
   dailyKey,
   reasoningOptionsForGuestModel,
-  openAiRequestBodyForGuest
+  openAiRequestBodyForGuest,
+  isSupportedGuestPracticeRoute
 } = require("./guest-policy");
 
 function validPayload(overrides = {}) {
@@ -112,6 +113,35 @@ test("guest backend prompt is server-built and ignores client instructions", () 
   assert.equal(result.prompt.instructions.includes("coding-practice coach"), true);
   assert.equal(result.prompt.instructions.includes("generic proxy"), false);
   assert.equal(result.prompt.inputText.includes("Ignore all previous instructions"), false);
+});
+
+test("guest level 1 prompt forbids exact reveal and requests learning metadata", () => {
+  const result = validateGuestRequest(validPayload({ hintLevel: 1 }));
+  assert.equal(result.ok, true);
+  assert.match(result.prompt.inputText, /For level 1/);
+  assert.match(result.prompt.inputText, /never reveal an exact formula, operator, API, data structure, algorithm\/pattern name, loop structure, return expression, or implementation strategy/);
+  assert.match(result.prompt.inputText, /"hint_level": 1/);
+  assert.match(result.prompt.inputText, /"hint_stage": "initial_approach"/);
+  assert.match(result.prompt.inputText, /"problem_type_tags": \[\]/);
+  assert.match(result.prompt.inputText, /"caution_point_tags": \[\]/);
+  assert.match(result.prompt.inputText, /"implementation_hint_tags": \[\]/);
+  assert.match(result.prompt.inputText, /"categories": \[\]/);
+  assert.match(result.prompt.inputText, /"weakness_tags": \[\]/);
+  assert.match(result.prompt.inputText, /"should_escalate": false/);
+  assert.match(result.prompt.inputText, /"contains_solution_code": false/);
+});
+
+test("guest backend independently validates supported practice routes", () => {
+  assert.equal(isSupportedGuestPracticeRoute("https://leetcode.com/problems/two-sum/").ok, true);
+  assert.equal(isSupportedGuestPracticeRoute("https://leetcode.com/contest/weekly-contest-400/problems/a/").ok, false);
+  assert.equal(isSupportedGuestPracticeRoute("https://school.programmers.co.kr/learn/courses/30/lessons/42626?language=python3").ok, true);
+  assert.equal(isSupportedGuestPracticeRoute("https://school.programmers.co.kr/learn/challenges?order=recent&page=1").ok, false);
+  assert.equal(isSupportedGuestPracticeRoute("https://example.com/problems/two-sum/").ok, false);
+  assert.equal(isSupportedGuestPracticeRoute("not a url").ok, false);
+
+  assert.equal(validateGuestRequest(validPayload({
+    context: { ...validPayload().context, problemUrl: "https://leetcode.com/assessment/session/example" }
+  })).ok, false);
 });
 
 test("guest OpenAI request body uses low reasoning, no tools, store false, and server model", () => {

@@ -25,11 +25,12 @@
   let host = null;
   let shadow = null;
   let bubble = null;
+  let uiLanguage = "en";
 
   chrome.runtime.onMessage.addListener((message) => {
     if (!activeRequestId || message?.requestId !== activeRequestId) return false;
     if (message.type === "INLINE_AI_START") {
-      setBubbleBusy(true, "Thinking...");
+      setBubbleBusy(true, t("thinking"));
       return false;
     }
     if (message.type === "INLINE_AI_DELTA") {
@@ -41,7 +42,7 @@
       const visible = visibleAiText(rawText);
       const metadata = parseMetadata(rawText);
       if (metadata?.contains_solution_code || looksLikeFullCode(visible)) {
-        renderAnswer("I can’t show a full solution here. Try one smaller hint from the coach instead.", true, message.trial || null);
+        renderAnswer(t("fullSolutionBlocked"), true, message.trial || null);
         activeRequestId = "";
         return false;
       }
@@ -51,13 +52,14 @@
       return false;
     }
     if (message.type === "INLINE_AI_ERROR") {
-      renderError(message.error || "CodeCoach could not generate a hint.");
+      renderError(message.error || t("hintError"));
       activeRequestId = "";
       return false;
     }
     return false;
   });
 
+  loadUiLanguage().catch(() => {});
   setTimeout(checkCoachState, 2500);
   setInterval(checkCoachState, POLL_MS);
   window.addEventListener("scroll", positionBubble, true);
@@ -86,6 +88,14 @@
       shownReasons.add("solved");
       return;
     }
+    if (signature && signature !== lastCodeSignature) {
+      if (lastCodeSignature) {
+        lastProgressAt = Date.now();
+        if (isPassivePromptReason(activeReason)) removeBubble();
+      }
+      lastCodeSignature = signature;
+    }
+
     if (result.status === "passed" && result.kind === "run") {
       const closeEventId = result.eventId || `${signature}:${result.summary || "passed-run"}`;
       if (closeEventId && closeEventId !== lastCloseEventId) {
@@ -93,14 +103,6 @@
         maybeShow("close", context, closeEventId);
       }
       return;
-    }
-
-    if (signature && signature !== lastCodeSignature) {
-      if (lastCodeSignature) {
-        lastProgressAt = Date.now();
-        if (activeReason === "stuck" || activeReason === "failed") removeBubble();
-      }
-      lastCodeSignature = signature;
     }
 
     const failedEventId = result.status === "failed"
@@ -141,32 +143,33 @@
   function renderPrompt(reason) {
     ensureBubble();
     if (!bubble) return;
+    bubble.dataset.phase = "prompt";
     const body = bubble.querySelector(".cc-body");
     if (reason === "planning") {
       body.innerHTML = `
         <div class="cc-kicker">CODECOACH · PLAN</div>
-        <div class="cc-title">What’s your approach?</div>
-        <div class="cc-copy">Explain it in one or two sentences before you code.</div>
-        <textarea class="cc-plan-input" rows="2" placeholder="I’ll start by..."></textarea>
-        <div class="cc-actions"><button class="cc-primary" data-action="approach">Check my approach</button><button class="cc-ghost" data-action="dismiss">Not now</button></div>`;
+        <div class="cc-title">${escapeHtml(t("planningTitle"))}</div>
+        <div class="cc-copy">${escapeHtml(t("planningCopy"))}</div>
+        <textarea class="cc-plan-input" rows="2" placeholder="${escapeHtml(t("planningPlaceholder"))}"></textarea>
+        <div class="cc-actions"><button class="cc-primary" data-action="approach">${escapeHtml(t("checkApproach"))}</button><button class="cc-ghost" data-action="dismiss">${escapeHtml(t("notNow"))}</button></div>`;
     } else if (reason === "failed") {
       body.innerHTML = `
         <div class="cc-kicker">CODECOACH · DEBUG</div>
-        <div class="cc-title">Submission failed.</div>
-        <div class="cc-copy">Want one small debugging question, not the answer?</div>
-        <div class="cc-actions"><button class="cc-primary" data-action="nudge">Debug this</button><button class="cc-ghost" data-action="dismiss">Dismiss</button></div>`;
+        <div class="cc-title">${escapeHtml(t("failedTitle"))}</div>
+        <div class="cc-copy">${escapeHtml(t("failedCopy"))}</div>
+        <div class="cc-actions"><button class="cc-primary" data-action="nudge">${escapeHtml(t("debugThis"))}</button><button class="cc-ghost" data-action="dismiss">${escapeHtml(t("dismiss"))}</button></div>`;
     } else if (reason === "close") {
       body.innerHTML = `
         <div class="cc-kicker">CODECOACH · EDGE CASE</div>
-        <div class="cc-title">Sample tests pass.</div>
-        <div class="cc-copy">Want one edge-case check before submitting?</div>
-        <div class="cc-actions"><button class="cc-primary" data-action="nudge">Check edge cases</button><button class="cc-ghost" data-action="dismiss">Dismiss</button></div>`;
+        <div class="cc-title">${escapeHtml(t("closeTitle"))}</div>
+        <div class="cc-copy">${escapeHtml(t("closeCopy"))}</div>
+        <div class="cc-actions"><button class="cc-primary" data-action="nudge">${escapeHtml(t("checkEdges"))}</button><button class="cc-ghost" data-action="dismiss">${escapeHtml(t("dismiss"))}</button></div>`;
     } else {
       body.innerHTML = `
         <div class="cc-kicker">CODECOACH · STUCK?</div>
-        <div class="cc-title">Need a small nudge?</div>
-        <div class="cc-copy">I’ll point at one next thought and keep the solution hidden.</div>
-        <div class="cc-actions"><button class="cc-primary" data-action="nudge">Nudge me</button><button class="cc-ghost" data-action="dismiss">Dismiss</button></div>`;
+        <div class="cc-title">${escapeHtml(t("stuckTitle"))}</div>
+        <div class="cc-copy">${escapeHtml(t("stuckCopy"))}</div>
+        <div class="cc-actions"><button class="cc-primary" data-action="nudge">${escapeHtml(t("nudgeMe"))}</button><button class="cc-ghost" data-action="dismiss">${escapeHtml(t("dismiss"))}</button></div>`;
     }
     wireActions();
     positionBubble();
@@ -213,7 +216,7 @@
         renderGuestStart(() => requestHint(level));
         return;
       }
-      renderError(response?.error || "Start the guest trial or connect your OpenAI API key.");
+      renderError(response?.error || t("connectAccess"));
     }
   }
 
@@ -238,22 +241,23 @@
         renderGuestStart(() => requestApproachFeedback(userMessage));
         return;
       }
-      renderError(response?.error || "Start the guest trial or connect your OpenAI API key.");
+      renderError(response?.error || t("connectAccess"));
     }
   }
 
   function renderGuestStart(afterStart) {
     ensureBubble();
+    bubble.dataset.phase = "guest";
     bubble.querySelector(".cc-body").innerHTML = `
       <div class="cc-kicker">CODECOACH · GUEST</div>
-      <div class="cc-title">Try free coaching.</div>
-      <div class="cc-copy">Start a private guest session and use one of 10 free AI questions.</div>
-      <div class="cc-actions"><button class="cc-primary" data-action="guest">Try free · 10 questions</button><button class="cc-ghost" data-action="close">Done</button></div>`;
+      <div class="cc-title">${escapeHtml(t("tryFreeTitle"))}</div>
+      <div class="cc-copy">${escapeHtml(t("tryFreeCopy"))}</div>
+      <div class="cc-actions"><button class="cc-primary" data-action="guest">${escapeHtml(t("tryFreeCta"))}</button><button class="cc-ghost" data-action="close">${escapeHtml(t("done"))}</button></div>`;
     bubble.querySelector("[data-action='guest']")?.addEventListener("click", async () => {
-      setBubbleBusy(true, "Starting...");
+      setBubbleBusy(true, t("starting"));
       const response = await sendMessage({ type: "START_GUEST_TRIAL" }).catch((error) => ({ ok: false, error: error.message }));
       if (!response?.ok) {
-        renderError(response?.error || "Guest mode is temporarily unavailable.");
+        renderError(response?.error || t("guestUnavailable"));
         return;
       }
       await afterStart();
@@ -264,15 +268,16 @@
 
   function renderAnswer(text, done, trial = null) {
     ensureBubble();
-    const remaining = trial && Number.isFinite(Number(trial.remaining)) ? `<span class="cc-trial">Guest · ${trial.remaining} left</span>` : "";
+    bubble.dataset.phase = done ? "answer" : "loading";
+    const remaining = trial && Number.isFinite(Number(trial.remaining)) ? `<span class="cc-trial">${escapeHtml(t("guestLeft", { remaining: trial.remaining }))}</span>` : "";
     const currentLevel = Number(bubble.dataset.level || 1);
     const primaryAction = currentLevel >= 3
-      ? `<button class="cc-primary" data-action="open">Open coach</button>`
-      : `<button class="cc-primary" data-action="more">More specific</button>`;
+      ? `<button class="cc-primary" data-action="open">${escapeHtml(t("openCoach"))}</button>`
+      : `<button class="cc-primary" data-action="more">${escapeHtml(t("moreSpecific"))}</button>`;
     bubble.querySelector(".cc-body").innerHTML = `
       <div class="cc-kicker">CODECOACH</div>
-      <div class="cc-answer">${escapeHtml(text || "Thinking...")}</div>
-      ${done ? `<div class="cc-actions">${primaryAction}<button class="cc-ghost" data-action="close">Done</button></div>${remaining}` : ""}`;
+      <div class="cc-answer">${escapeHtml(text || t("thinking"))}</div>
+      ${done ? `<div class="cc-actions">${primaryAction}<button class="cc-ghost" data-action="close">${escapeHtml(t("done"))}</button></div>${remaining}` : ""}`;
     if (done) {
       bubble.querySelector("[data-action='more']")?.addEventListener("click", () => {
         const currentLevel = Number(bubble.dataset.level || 1);
@@ -291,10 +296,11 @@
 
   function renderError(text) {
     ensureBubble();
+    bubble.dataset.phase = "error";
     bubble.querySelector(".cc-body").innerHTML = `
       <div class="cc-kicker">CODECOACH</div>
       <div class="cc-answer">${escapeHtml(text)}</div>
-      <div class="cc-actions"><button class="cc-ghost" data-action="close">Close</button></div>`;
+      <div class="cc-actions"><button class="cc-ghost" data-action="close">${escapeHtml(t("close"))}</button></div>`;
     bubble.querySelector("[data-action='close']")?.addEventListener("click", removeBubble);
   }
 
@@ -303,7 +309,7 @@
     const primary = bubble.querySelector(".cc-primary");
     if (primary) {
       primary.disabled = true;
-      primary.textContent = label || "Thinking...";
+      primary.textContent = label || t("thinking");
     }
   }
 
@@ -467,6 +473,20 @@
     return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   }
 
+  async function loadUiLanguage() {
+    const response = await sendMessage({ type: "GET_SETTINGS" }).catch(() => null);
+    uiLanguage = response?.settings?.uiLanguage === "ko" ? "ko" : "en";
+  }
+
+  function isPassivePromptReason(reason) {
+    return bubble?.dataset.phase === "prompt" && ["planning", "stuck", "failed", "close"].includes(reason);
+  }
+
+  function t(key, vars = {}) {
+    const value = STRINGS[uiLanguage]?.[key] || STRINGS.en[key] || key;
+    return value.replace(/\{(\w+)\}/g, (_match, name) => String(vars[name] ?? ""));
+  }
+
   function sendMessage(message) {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(message, (response) => {
@@ -475,4 +495,69 @@
       });
     });
   }
+
+  const STRINGS = {
+    en: {
+      planningTitle: "What's your approach?",
+      planningCopy: "Explain it in one or two sentences before you code.",
+      planningPlaceholder: "I'll start by...",
+      checkApproach: "Check my approach",
+      notNow: "Not now",
+      failedTitle: "Submission failed.",
+      failedCopy: "Want one small debugging question, not the answer?",
+      debugThis: "Debug this",
+      dismiss: "Dismiss",
+      closeTitle: "Sample tests pass.",
+      closeCopy: "Want one edge-case check before submitting?",
+      checkEdges: "Check edge cases",
+      stuckTitle: "Need a small nudge?",
+      stuckCopy: "I'll point at one next thought and keep the solution hidden.",
+      nudgeMe: "Nudge me",
+      tryFreeTitle: "Try free coaching.",
+      tryFreeCopy: "Start a private guest session and use one of 10 free AI questions.",
+      tryFreeCta: "Try free · 10 questions",
+      thinking: "Thinking...",
+      starting: "Starting...",
+      moreSpecific: "More specific",
+      openCoach: "Open coach",
+      done: "Done",
+      close: "Close",
+      guestLeft: "Guest · {remaining} left",
+      connectAccess: "Start guest mode or connect your OpenAI API key.",
+      guestUnavailable: "Guest mode is temporarily unavailable.",
+      hintError: "CodeCoach could not generate a hint.",
+      fullSolutionBlocked: "I can't show a full solution here. Try one smaller hint from the coach instead."
+    },
+    ko: {
+      planningTitle: "접근 방법이 어떻게 되나요?",
+      planningCopy: "코드를 더 작성하기 전에 한두 문장으로 설명해 보세요.",
+      planningPlaceholder: "먼저 이렇게 생각해볼게요...",
+      checkApproach: "접근 확인",
+      notNow: "나중에",
+      failedTitle: "제출이 실패했습니다.",
+      failedCopy: "정답 말고 작은 디버깅 질문 하나 받아볼까요?",
+      debugThis: "디버깅 힌트",
+      dismiss: "닫기",
+      closeTitle: "샘플 테스트는 통과했습니다.",
+      closeCopy: "제출 전에 엣지 케이스 하나 확인할까요?",
+      checkEdges: "엣지 케이스 확인",
+      stuckTitle: "작은 힌트가 필요하신가요?",
+      stuckCopy: "정답은 숨기고 다음 생각 하나만 짚어드릴게요.",
+      nudgeMe: "힌트 받기",
+      tryFreeTitle: "무료 코칭을 시작해보세요.",
+      tryFreeCopy: "비공개 게스트 세션으로 무료 AI 질문 10회를 사용할 수 있습니다.",
+      tryFreeCta: "무료로 시작 · 10회",
+      thinking: "생각 중...",
+      starting: "시작 중...",
+      moreSpecific: "더 구체적으로",
+      openCoach: "코치 열기",
+      done: "완료",
+      close: "닫기",
+      guestLeft: "게스트 · {remaining}회 남음",
+      connectAccess: "게스트 모드를 시작하거나 OpenAI API key를 연결하세요.",
+      guestUnavailable: "게스트 모드를 잠시 사용할 수 없습니다.",
+      hintError: "CodeCoach가 힌트를 만들지 못했습니다.",
+      fullSolutionBlocked: "여기서는 전체 정답 코드를 보여줄 수 없습니다. 코치에서 더 작은 힌트를 요청해 주세요."
+    }
+  };
 })();

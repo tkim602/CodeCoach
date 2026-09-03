@@ -144,6 +144,15 @@ CodeCoach does not sell user data or use it for advertising. It does not run on 
 
 The full data-handling description is in the [privacy policy](https://tkim602.github.io/CodeCoach/privacy-policy.html), hosted from this repository.
 
+### Guest backend release prerequisites
+
+Before publishing a build that enables guest AI, verify the Firebase project used by `GUEST_ENDPOINT` has:
+
+- Firebase Anonymous Authentication enabled.
+- Firestore available for guest quota and budget documents.
+- The `OPENAI_API_KEY` Firebase secret configured.
+- The `guestCoach` function deployed at the endpoint in `src/background/coach-router.js`.
+
 ## Supported platforms
 
 - [LeetCode](https://leetcode.com/problemset/)
