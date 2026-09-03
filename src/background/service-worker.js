@@ -4,6 +4,8 @@ import { buildAnalyzeRequest, buildChatCoachRequest, buildCodeDiffRequest, build
 import { evaluateCodingPracticePage } from "../shared/pageRules.js";
 import { buildMarkdownExport } from "../shared/markdown.js";
 import { aggregateTaxonomyEvents } from "../shared/taxonomy/index.js";
+import { clearGuestSession } from "../shared/guest-auth.js";
+import { isCoachMessage, handleCoachMessage } from "./coach-router.js";
 import {
   addCodeSnapshot,
   addCoachThreadMessage,
@@ -108,6 +110,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
+  if (isCoachMessage(message)) return handleCoachMessage(message, sender);
+
   switch (message?.type) {
     case "GET_SETTINGS":
       return { ok: true, settings: await getPublicSettings() };
@@ -122,9 +126,13 @@ async function handleMessage(message, sender) {
       return { ok: true };
     case "CLEAR_ALL_LOCAL_DATA":
       await clearAllLocalData();
+      await clearGuestSession();
       return { ok: true };
     case "GET_ACTIVE_CONTEXT":
       return { ok: true, context: await getActiveContext() };
+    case "OPEN_SIDE_PANEL":
+      if (sender?.tab?.id) await chrome.sidePanel.open({ tabId: sender.tab.id });
+      return { ok: true };
     case "PAGE_CONTEXT_UPDATED":
       sendRuntimeMessage({ type: "PAGE_CONTEXT_UPDATED", context: message.context || {} });
       maybeSaveContextResultSnapshot(message.context || {}).catch(() => { });
@@ -269,8 +277,6 @@ async function getActiveContext() {
 }
 
 async function saveDetectedSubmissionSnapshot(message) {
-  // Mark the eventId synchronously before any await to prevent races with
-  // maybeSaveContextResultSnapshot processing the same result concurrently.
   const eventId = getResultEventId(message);
   if (eventId && wasResultEventSaved(eventId)) {
     return { skipped: true, reason: "Duplicate result event." };
@@ -285,8 +291,6 @@ async function saveDetectedSubmissionSnapshot(message) {
   const context = message.context || {};
   const status = ["passed", "failed"].includes(message.status) ? message.status : "";
   const trimmedCode = context.code?.trim() || "";
-  // Require at least 10 non-whitespace characters so empty captures and stub
-  // skeletons (e.g. just a function signature without a body) are not saved.
   if (!status || !context.allowed || !context.problemUrl || trimmedCode.length < 10) {
     return { skipped: true, reason: "No valid submission snapshot." };
   }
@@ -925,7 +929,7 @@ async function streamOpenAi({ apiKey, model, instructions, inputText, maxOutputT
 function reasoningOptionsForModel(model) {
   const normalized = String(model || "").toLowerCase();
   if (normalized.startsWith("gpt-5")) {
-    return { effort: "minimal" };
+    return { effort: "low" };
   }
   return null;
 }

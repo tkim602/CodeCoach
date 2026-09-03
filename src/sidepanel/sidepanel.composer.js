@@ -19,7 +19,6 @@ const ACTION_I18N_KEYS = {
 export function createComposerController({
   elements,
   startAiRequest,
-  startChatRequest,
   appendUserMessage,
   startAssistantMessage,
   t = (key) => key,
@@ -53,7 +52,7 @@ export function createComposerController({
     appendUserMessage?.(text);
     startAssistantMessage?.();
     elements.chatInput.value = "";
-    startChatRequest?.(text);
+    startAiRequest?.(REQUEST_KINDS.chatCoach, text);
   }
 
   return { init };

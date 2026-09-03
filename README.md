@@ -124,24 +124,34 @@ The assistant returns hidden structured metadata alongside the visible response.
 
 ### Local-first storage
 
-Cloud sync is **off by default**. The OpenAI API key, saved notes, code snapshots, settings, and study history are stored in `chrome.storage.local` unless the user enables an optional sync feature.
+Cloud sync is **off by default**. The OpenAI API key, guest-session state, saved notes, code snapshots, settings, and study history are stored in `chrome.storage.local` unless the user enables an optional sync feature.
 
 Optional Firebase Authentication supports Google or email/password sign-in. When cloud sync is enabled, selected learning metadata such as hint events, weakness categories, review schedules, problem identifiers, and timestamps can be synchronized through Firestore. Saved code snapshots and wrong-answer note bodies remain local in the current release.
 
 ## Privacy model
 
-CodeCoach uses a bring-your-own-key model for AI requests.
+CodeCoach supports two AI access paths:
 
 ```text
-Browser extension -> OpenAI API
-                 -> optional Firebase / Google services
+BYOK:  Browser extension -> OpenAI API
+Guest: Browser extension -> Firebase guestCoach -> OpenAI API
+                         -> optional Firebase / Google services
 ```
 
-There is no CodeCoach-operated backend proxy for OpenAI requests. The user's API key and request are sent from the extension directly to OpenAI over HTTPS, and OpenAI requests are made with `store: false` in the current implementation.
+BYOK requests use the user's own OpenAI API key and are sent from the extension directly to OpenAI over HTTPS. Guest requests use the CodeCoach Firebase backend to enforce free-use quota, cost controls, and abuse protection before forwarding the coaching request to OpenAI. OpenAI requests are made with `store: false` in the current implementation.
 
 CodeCoach does not sell user data or use it for advertising. It does not run on arbitrary websites; host permissions are limited to supported coding-practice pages and the API endpoints required for OpenAI and optional Firebase features.
 
 The full data-handling description is in the [privacy policy](https://tkim602.github.io/CodeCoach/privacy-policy.html), hosted from this repository.
+
+### Guest backend release prerequisites
+
+Before publishing a build that enables guest AI, verify the Firebase project used by `GUEST_ENDPOINT` has:
+
+- Firebase Anonymous Authentication enabled.
+- Firestore available for guest quota and budget documents.
+- The `OPENAI_API_KEY` Firebase secret configured.
+- The `guestCoach` function deployed at the endpoint in `src/background/coach-router.js`.
 
 ## Supported platforms
 
@@ -205,7 +215,7 @@ Then:
 5. Open a supported LeetCode or Programmers problem.
 6. Click the CodeCoach extension icon to open the side panel.
 
-An OpenAI API key can be added from the extension settings for AI features.
+An OpenAI API key can be added from the extension settings for BYOK AI features. Guest mode provides a limited free trial without requiring a user API key.
 
 ### Landing page development
 

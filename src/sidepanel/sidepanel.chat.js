@@ -44,9 +44,11 @@ export function createChatController({ elements, documentRef = document, t = (ke
     return activeAssistantMessage;
   }
 
-  function setEmptyState({ apiConnected = false, allowed = false } = {}) {
+  function setEmptyState({ apiConnected = false, aiAccessMode = "", allowed = false } = {}) {
     if (!elements.coachChatTranscript || hasConversationContent()) return;
-    const apiText = apiConnected ? t("apiConnectedLabel") : t("apiNotConnectedLabel");
+    const apiText = aiAccessMode === "guest"
+      ? t("guestAiReady")
+      : (apiConnected || aiAccessMode === "byok") ? t("apiConnectedLabel") : t("apiNotConnectedLabel");
     const pageText = allowed ? t("pageAllowedText") : t("pageNotAllowedText");
     const existing = elements.coachChatTranscript.querySelector(".chat-empty-state");
     const emptyState = existing || documentRef.createElement("div");
