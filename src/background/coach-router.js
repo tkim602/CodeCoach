@@ -1,6 +1,7 @@
 import { REQUEST_KINDS } from "../shared/constants.js";
 import { buildAnalyzeRequest, buildChatCoachRequest, buildCodeDiffRequest, buildDebugLabRequest, buildHintRequest, buildNextCodeHintRequest, buildNoteRequest } from "../shared/prompts.js";
-import { getSettings } from "../shared/storage.js";
+import { getAllLearningData, getSettings } from "../shared/storage.js";
+import { chatHistoryForContext } from "../shared/chatThreads.js";
 import { ensureGuestSession, getGuestSession } from "../shared/guest-auth.js";
 import { redactSensitiveText } from "../shared/openaiErrors.js";
 
@@ -36,6 +37,14 @@ export async function handleCoachMessage(message, sender) {
       responseLanguage: settings.responseLanguage || "auto"
     };
     ensureContextAllowed(settings, context);
+
+    if (kind === REQUEST_KINDS.chatCoach && !Array.isArray(message.chatHistory)) {
+      const learning = await getAllLearningData().catch(() => null);
+      message = {
+        ...message,
+        chatHistory: chatHistoryForContext(learning?.coachThreads || [], context, { excludeKinds: ["debug_lab"] })
+      };
+    }
 
     if (message.type === "STREAM_INLINE_AI" && settings.apiKey) {
       streamInlineWithOwnKey({ message, sender, settings, requestId, kind, context }).catch((error) => {
