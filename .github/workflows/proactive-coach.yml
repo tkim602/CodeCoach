@@ -22,13 +22,15 @@ jobs:
       - run: npm run build
       - name: Check extension JavaScript syntax
         run: |
-          node --check src/background/background.js
           node --check src/background/coach-router.js
           node --check src/background/service-worker.js
           node --check src/shared/guest-auth.js
           node --check src/content/proactive-coach.js
+          node --check src/sidepanel/aiAccessMode.js
           node --check src/sidepanel/guest-onboarding.js
           node --check src/sidepanel/sidepanel.ai.js
+          node --check src/sidepanel/sidepanel.chat.js
+          node --check src/sidepanel/sidepanel.composer.js
       - name: Test guest quota and cost policy
         working-directory: functions
         run: |
