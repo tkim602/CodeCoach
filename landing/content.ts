@@ -105,7 +105,7 @@ export const content: Record<Locale, LandingContent> = {
       copy: "현재 작성한 코드와 실행 결과를 읽고, 지금 필요한 만큼만 힌트를 줍니다. 틀린 시도는 기록으로 남겨 같은 실수를 반복하지 않게 돕습니다.",
       install: "CodeCoach 설치",
       github: "GitHub에서 코드 보기",
-      facts: ["무료로 사용", "LeetCode · 프로그래머스", "개인 OpenAI API 키 사용"],
+      facts: ["무료로 사용", "LeetCode · 프로그래머스", "게스트 체험 또는 개인 API 키"],
     },
     demo: {
       label: "실제 사용 화면",
@@ -166,7 +166,7 @@ export const content: Record<Locale, LandingContent> = {
     trust: {
       label: "Local-first",
       title: "학습 기록과 API 키는 기본적으로 브라우저에 남습니다.",
-      copy: "CodeCoach가 운영하는 AI 프록시 서버는 없습니다. 사용자의 OpenAI API 키로 확장 프로그램에서 OpenAI에 직접 요청하며, 저장한 코드와 오답 기록은 로컬에 보관합니다.",
+      copy: "BYOK 요청은 사용자의 OpenAI API 키로 OpenAI에 직접 전송됩니다. 게스트 체험 요청은 무료 사용량과 악용 방지를 위해 CodeCoach 백엔드를 거쳐 OpenAI로 전송됩니다. 저장한 코드와 오답 기록은 기본적으로 로컬에 보관합니다.",
       points: ["OpenAI 요청은 store: false로 전송", "클라우드 동기화는 기본값이 꺼짐", "코드 스냅샷과 오답 본문은 로컬 보관"],
     },
     faq: {
@@ -177,7 +177,7 @@ export const content: Record<Locale, LandingContent> = {
     faqs: [
       { question: "LeetCode 정답 코드를 바로 보여주나요?", answer: "아니요. 기본 흐름은 작은 힌트에서 시작해 필요한 경우에만 더 구체적인 도움으로 넘어갑니다. 완성된 정답 코드를 먼저 제공하지 않습니다." },
       { question: "프로그래머스에서도 사용할 수 있나요?", answer: "네. CodeCoach는 LeetCode와 프로그래머스의 문제 페이지를 지원하며, 각 사이트의 편집기와 실행 결과를 같은 내부 맥락으로 정리합니다." },
-      { question: "OpenAI API 키가 필요한가요?", answer: "AI 코칭 기능에는 개인 OpenAI API 키가 필요합니다. 키는 브라우저에 로컬로 저장되고, 요청은 OpenAI로 직접 전송됩니다." },
+      { question: "OpenAI API 키가 필요한가요?", answer: "게스트 체험은 API 키 없이 제한적으로 사용할 수 있습니다. 이후 계속 사용하려면 개인 OpenAI API 키를 연결할 수 있으며, 키는 브라우저에 로컬로 저장됩니다." },
       { question: "실제 코딩테스트나 채용 시험에서 사용해도 되나요?", answer: "아니요. CodeCoach는 연습용 도구입니다. 진행 중인 대회, 자격시험, 채용 평가, 비공개 시험과 같은 평가 환경에서는 도움을 제공하지 않습니다." },
     ],
     closing: {
@@ -208,7 +208,7 @@ export const content: Record<Locale, LandingContent> = {
       copy: "CodeCoach reads the code and run result already on your screen, then gives only the amount of help you ask for. Failed attempts become notes you can actually use again.",
       install: "Install CodeCoach",
       github: "View the code on GitHub",
-      facts: ["Free to use", "LeetCode · Programmers", "Bring your own OpenAI API key"],
+      facts: ["Free to use", "LeetCode · Programmers", "Guest trial or your API key"],
     },
     demo: {
       label: "Real product",
@@ -244,7 +244,7 @@ export const content: Record<Locale, LandingContent> = {
     trust: {
       label: "Local-first",
       title: "Your API key and practice records stay in your browser by default.",
-      copy: "CodeCoach does not run an AI proxy. Requests go directly from the extension to OpenAI with your own key, while saved code and wrong-answer notes remain local.",
+      copy: "BYOK requests go directly from the extension to OpenAI with your own key. Guest trial requests go through the CodeCoach backend for free-use quota and abuse protection before reaching OpenAI. Saved code and wrong-answer notes remain local by default.",
       points: ["OpenAI requests use store: false", "Cloud sync is off by default", "Code snapshots and note bodies stay local"],
     },
     faq: {
@@ -255,7 +255,7 @@ export const content: Record<Locale, LandingContent> = {
     faqs: [
       { question: "Does CodeCoach give full LeetCode solutions?", answer: "No. The default flow starts with a small hint and becomes more specific only when you ask. It does not lead with complete accepted code." },
       { question: "Does it work on Programmers?", answer: "Yes. CodeCoach supports LeetCode and Programmers problem pages and normalizes their editor and run-result context." },
-      { question: "Do I need an OpenAI API key?", answer: "Yes for AI coaching features. Your key is stored locally in the browser and requests are sent directly to OpenAI." },
+      { question: "Do I need an OpenAI API key?", answer: "The guest trial works without your API key for limited use. After that, you can connect your own OpenAI API key; the key is stored locally in the browser." },
       { question: "Can I use it during a live assessment?", answer: "No. CodeCoach is a practice tool and disables assistance for contests, certifications, hiring tests, private assessments, and similar evaluation settings." },
     ],
     closing: {

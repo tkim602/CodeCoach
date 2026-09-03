@@ -9,11 +9,15 @@ const {
   GUEST_MODEL,
   GUEST_MAX_REQUESTS,
   GUEST_MAX_SPEND_MICRO_USD,
-  GUEST_MAX_OUTPUT_TOKENS,
   calculateCostMicroUsd,
   maximumRequestCostMicroUsd,
   validateGuestRequest,
-  canReserveGuestRequest
+  canReserveGuestRequest,
+  canReserveIpWindow,
+  canReserveGlobalBudget,
+  hashIp,
+  dailyKey,
+  openAiRequestBodyForGuest
 } = require("./guest-policy");
 
 initializeApp();
@@ -25,6 +29,7 @@ exports.guestCoach = onRequest({
   secrets: [OPENAI_API_KEY],
   timeoutSeconds: 45,
   memory: "256MiB",
+  maxInstances: 5,
   cors: true
 }, async (req, res) => {
   if (req.method === "OPTIONS") return res.status(204).send("");
@@ -42,23 +47,42 @@ exports.guestCoach = onRequest({
       return res.json({ trial: publicTrial(snapshot.data()) });
     }
 
-    const kind = String(req.body?.kind || "");
-    const instructions = String(req.body?.instructions || "");
-    const inputText = String(req.body?.inputText || "");
-    const requestId = String(req.body?.requestId || "").slice(0, 120);
-    const validation = validateGuestRequest({ kind, instructions, inputText });
+    const validation = validateGuestRequest(req.body || {});
     if (!validation.ok) return res.status(400).json({ error: validation.error });
-    if (!requestId) return res.status(400).json({ error: "Missing request id." });
+    const { request, prompt } = validation;
+    const { requestId, kind } = request;
 
     const reservation = maximumRequestCostMicroUsd();
+    const today = dailyKey();
+    const ipHash = hashIp(requestIp(req), OPENAI_API_KEY.value());
+    const ipRef = ipHash ? db.collection("guestIpDaily").doc(`${today}_${ipHash}`) : null;
+    const budgetRef = db.collection("guestBudget").doc(today);
     let reservedTrial;
     await db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(trialRef);
-      const current = snapshot.data() || {};
+      const [trialSnapshot, ipSnapshot, budgetSnapshot] = await Promise.all([
+        transaction.get(trialRef),
+        ipRef ? transaction.get(ipRef) : Promise.resolve(null),
+        transaction.get(budgetRef)
+      ]);
+      const current = trialSnapshot.data() || {};
+      const currentIp = ipSnapshot?.data?.() || {};
+      const currentBudget = budgetSnapshot.data() || {};
       const eligibility = canReserveGuestRequest(current);
       if (!eligibility.ok) {
         const error = new Error(eligibility.reason);
         error.code = eligibility.reason;
+        throw error;
+      }
+      const ipEligibility = ipRef ? canReserveIpWindow(currentIp) : { ok: true };
+      if (!ipEligibility.ok) {
+        const error = new Error(ipEligibility.reason);
+        error.code = ipEligibility.reason;
+        throw error;
+      }
+      const budgetEligibility = canReserveGlobalBudget(currentBudget);
+      if (!budgetEligibility.ok) {
+        const error = new Error(budgetEligibility.reason);
+        error.code = budgetEligibility.reason;
         throw error;
       }
 
@@ -78,25 +102,31 @@ exports.guestCoach = onRequest({
         updatedAt: FieldValue.serverTimestamp()
       };
       transaction.set(trialRef, reservedTrial, { merge: true });
+      if (ipRef) {
+        transaction.set(ipRef, {
+          requests: (Number(currentIp.requests) || 0) + 1,
+          createdAt: currentIp.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      transaction.set(budgetRef, {
+        requests: (Number(currentBudget.requests) || 0) + 1,
+        reservedMicroUsd: (Number(currentBudget.reservedMicroUsd) || 0) + reservation,
+        spentMicroUsd: Number(currentBudget.spentMicroUsd) || 0,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
     });
 
     let openAiResponse;
     try {
+      const safetyIdentifier = `guest_${hashIp(decoded.uid, OPENAI_API_KEY.value()).slice(0, 32)}`;
       openAiResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY.value()}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          model: GUEST_MODEL,
-          instructions,
-          input: [{ role: "user", content: [{ type: "input_text", text: inputText }] }],
-          reasoning: { effort: "minimal" },
-          stream: false,
-          store: false,
-          max_output_tokens: GUEST_MAX_OUTPUT_TOKENS
-        })
+        body: JSON.stringify(openAiRequestBodyForGuest(prompt, safetyIdentifier))
       });
 
       if (!openAiResponse.ok) {
@@ -115,8 +145,12 @@ exports.guestCoach = onRequest({
       });
 
       const finalTrial = await db.runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(trialRef);
+        const [snapshot, budgetSnapshot] = await Promise.all([
+          transaction.get(trialRef),
+          transaction.get(budgetRef)
+        ]);
         const current = snapshot.data() || {};
+        const currentBudget = budgetSnapshot.data() || {};
         const next = {
           spentMicroUsd: Math.min(
             GUEST_MAX_SPEND_MICRO_USD,
@@ -128,6 +162,11 @@ exports.guestCoach = onRequest({
           updatedAt: FieldValue.serverTimestamp()
         };
         transaction.set(trialRef, next, { merge: true });
+        transaction.set(budgetRef, {
+          spentMicroUsd: (Number(currentBudget.spentMicroUsd) || 0) + actualCost,
+          reservedMicroUsd: Math.max(0, (Number(currentBudget.reservedMicroUsd) || 0) - reservation),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
         return { ...current, ...next };
       });
 
@@ -141,7 +180,7 @@ exports.guestCoach = onRequest({
         trial: publicTrial(finalTrial)
       });
     } catch (error) {
-      await rollbackReservation(trialRef, reservation, requestId).catch(() => {});
+      await rollbackReservation({ trialRef, ipRef, budgetRef, reservation, requestId }).catch(() => {});
       throw error;
     }
   } catch (error) {
@@ -154,14 +193,24 @@ exports.guestCoach = onRequest({
     if (error?.code === "duplicate_request") {
       return res.status(409).json({ code: "DUPLICATE_REQUEST", error: "This guest request was already submitted." });
     }
+    if (error?.code === "ip_limit_reached") {
+      return res.status(429).json({ code: "GUEST_IP_LIMIT_REACHED", error: "Guest trial is busy on this network. Try again later or connect your API key." });
+    }
+    if (error?.code === "global_budget_reached") {
+      return res.status(429).json({ code: "GUEST_DAILY_BUDGET_REACHED", error: "Today's guest coaching budget has been used. Connect your API key to continue." });
+    }
     console.error("guestCoach", error);
     return res.status(500).json({ error: "Guest coaching is temporarily unavailable." });
   }
 });
 
-async function rollbackReservation(trialRef, reservation, requestId) {
+async function rollbackReservation({ trialRef, ipRef, budgetRef, reservation, requestId }) {
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(trialRef);
+    const [snapshot, ipSnapshot, budgetSnapshot] = await Promise.all([
+      transaction.get(trialRef),
+      ipRef ? transaction.get(ipRef) : Promise.resolve(null),
+      transaction.get(budgetRef)
+    ]);
     const current = snapshot.data() || {};
     const ids = Array.isArray(current.recentRequestIds) ? current.recentRequestIds : [];
     transaction.set(trialRef, {
@@ -170,12 +219,30 @@ async function rollbackReservation(trialRef, reservation, requestId) {
       recentRequestIds: ids.filter((id) => id !== requestId),
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
+    if (ipRef) {
+      const currentIp = ipSnapshot?.data?.() || {};
+      transaction.set(ipRef, {
+        requests: Math.max(0, (Number(currentIp.requests) || 0) - 1),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    const currentBudget = budgetSnapshot.data() || {};
+    transaction.set(budgetRef, {
+      requests: Math.max(0, (Number(currentBudget.requests) || 0) - 1),
+      reservedMicroUsd: Math.max(0, (Number(currentBudget.reservedMicroUsd) || 0) - reservation),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
   });
 }
 
 function bearerToken(header) {
   const match = String(header || "").match(/^Bearer\s+(.+)$/i);
   return match?.[1] || "";
+}
+
+function requestIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || req.ip || req.socket?.remoteAddress || "";
 }
 
 function publicTrial(value = {}) {

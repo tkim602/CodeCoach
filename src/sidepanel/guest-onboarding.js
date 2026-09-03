@@ -1,5 +1,6 @@
 const GUEST_STATUS_ID = "codecoach-guest-status";
 let guestTrial = null;
+let uiLanguage = "en";
 let suppressAutomaticModalOnce = false;
 
 bootGuestOnboarding().catch(() => {});
@@ -14,6 +15,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
 async function bootGuestOnboarding() {
   await domReady();
+  const settingsResponse = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" }).catch(() => null);
+  uiLanguage = settingsResponse?.settings?.uiLanguage === "ko" ? "ko" : "en";
   installGuestChoice();
   const response = await chrome.runtime.sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null);
   if (response?.enabled) {
@@ -36,13 +39,13 @@ function installGuestChoice() {
 
   const divider = document.createElement("div");
   divider.className = "codecoach-guest-divider";
-  divider.innerHTML = "<span>or</span>";
+  divider.innerHTML = `<span>${text("or")}</span>`;
 
   const button = document.createElement("button");
   button.id = "apikey-guest-continue";
   button.type = "button";
   button.className = "codecoach-guest-button";
-  button.innerHTML = `<strong>Continue as guest</strong><span>10 free AI questions · no API key required</span>`;
+  button.innerHTML = `<strong>${text("continueGuest")}</strong><span>${text("guestCtaSub")}</span>`;
 
   const note = document.createElement("p");
   note.id = "apikey-guest-note";
@@ -58,16 +61,16 @@ function installGuestChoice() {
   button.addEventListener("click", async () => {
     button.disabled = true;
     const original = button.innerHTML;
-    button.innerHTML = "<strong>Starting guest trial...</strong><span>Creating a private guest session</span>";
+    button.innerHTML = `<strong>${text("startingGuest")}</strong><span>${text("creatingGuest")}</span>`;
     const response = await chrome.runtime.sendMessage({ type: "START_GUEST_TRIAL" }).catch((error) => ({ ok: false, error: error.message }));
     if (!response?.ok) {
       button.disabled = false;
       button.innerHTML = original;
-      note.textContent = response?.error || "Guest mode is temporarily unavailable.";
+      note.textContent = response?.error || text("guestUnavailable");
       return;
     }
     guestTrial = response.trial || { remaining: 10, limit: 10, used: 0 };
-    note.textContent = "Guest mode is ready.";
+    note.textContent = text("guestReady");
     renderGuestStatus();
     const modal = document.getElementById("apikey-modal");
     if (modal) modal.hidden = true;
@@ -85,19 +88,19 @@ function renderGuestStatus() {
     row.appendChild(badge);
   }
   const remaining = Number.isFinite(Number(guestTrial?.remaining)) ? Number(guestTrial.remaining) : 10;
-  badge.textContent = remaining > 0 ? `Guest · ${remaining} left` : "Guest trial used · add API key";
+  badge.textContent = remaining > 0 ? text("guestLeft", { remaining }) : text("guestUsedBadge");
   badge.classList.toggle("is-empty", remaining <= 0);
 
   const button = document.getElementById("apikey-guest-continue");
   if (button) {
     button.disabled = remaining <= 0;
     button.innerHTML = remaining > 0
-      ? `<strong>Guest mode active</strong><span>${remaining} of 10 AI questions left</span>`
-      : `<strong>Guest trial used</strong><span>Connect your OpenAI API key to continue</span>`;
+      ? `<strong>${text("guestActive")}</strong><span>${text("guestCount", { remaining })}</span>`
+      : `<strong>${text("guestUsed")}</strong><span>${text("connectKey")}</span>`;
   }
 
   const note = document.getElementById("apikey-guest-note");
-  if (note) note.textContent = remaining > 0 ? `Guest trial active · ${remaining} questions left` : "Guest trial used. Connect your OpenAI API key to continue.";
+  if (note) note.textContent = remaining > 0 ? text("guestActiveNote", { remaining }) : text("guestUsedNote");
 }
 
 function observeFirstRunModal() {
@@ -120,3 +123,45 @@ function domReady() {
   if (document.readyState !== "loading") return Promise.resolve();
   return new Promise((resolve) => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
 }
+
+function text(key, vars = {}) {
+  const value = STRINGS[uiLanguage]?.[key] || STRINGS.en[key] || key;
+  return value.replace(/\{(\w+)\}/g, (_match, name) => String(vars[name] ?? ""));
+}
+
+const STRINGS = {
+  en: {
+    or: "or",
+    continueGuest: "Continue as guest",
+    guestCtaSub: "10 free AI questions · no API key required",
+    startingGuest: "Starting guest trial...",
+    creatingGuest: "Creating a private guest session",
+    guestUnavailable: "Guest mode is temporarily unavailable.",
+    guestReady: "Guest mode is ready.",
+    guestLeft: "Guest · {remaining} left",
+    guestUsedBadge: "Guest trial used · add API key",
+    guestActive: "Guest mode active",
+    guestCount: "{remaining} of 10 AI questions left",
+    guestUsed: "Guest trial used",
+    connectKey: "Connect your OpenAI API key to continue",
+    guestActiveNote: "Guest trial active · {remaining} questions left",
+    guestUsedNote: "Guest trial used. Connect your OpenAI API key to continue."
+  },
+  ko: {
+    or: "또는",
+    continueGuest: "게스트로 계속하기",
+    guestCtaSub: "무료 AI 질문 10회 · API key 불필요",
+    startingGuest: "게스트 체험을 시작하는 중...",
+    creatingGuest: "비공개 게스트 세션을 만드는 중",
+    guestUnavailable: "게스트 모드를 잠시 사용할 수 없습니다.",
+    guestReady: "게스트 모드가 준비되었습니다.",
+    guestLeft: "게스트 · {remaining}회 남음",
+    guestUsedBadge: "게스트 체험 종료 · API key 연결",
+    guestActive: "게스트 모드 사용 중",
+    guestCount: "무료 AI 질문 {remaining}/10회 남음",
+    guestUsed: "게스트 체험 종료",
+    connectKey: "계속하려면 OpenAI API key를 연결하세요",
+    guestActiveNote: "게스트 체험 사용 중 · {remaining}회 남음",
+    guestUsedNote: "게스트 체험을 모두 사용했습니다. 계속하려면 OpenAI API key를 연결하세요."
+  }
+};

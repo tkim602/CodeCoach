@@ -58,7 +58,7 @@ The extension runs directly beside supported coding-practice pages using the Chr
 
 ### Local-first privacy
 
-CodeCoach uses a bring-your-own-key model for AI features. Your OpenAI API key, code snapshots, notes, settings, and local study history are stored in your browser by default. AI requests are sent directly from the extension to OpenAI.
+CodeCoach supports a limited guest trial and bring-your-own-key AI. BYOK requests go directly from the extension to OpenAI using your API key. Guest trial requests go through the CodeCoach Firebase backend to enforce free-use quota, cost controls, and abuse protection. Your OpenAI API key, code snapshots, notes, settings, and local study history are stored in your browser by default.
 
 Optional account and learning-metadata sync is available only when enabled.
 

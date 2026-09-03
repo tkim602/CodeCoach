@@ -4,6 +4,7 @@ import { buildAnalyzeRequest, buildChatCoachRequest, buildCodeDiffRequest, build
 import { evaluateCodingPracticePage } from "../shared/pageRules.js";
 import { buildMarkdownExport } from "../shared/markdown.js";
 import { aggregateTaxonomyEvents } from "../shared/taxonomy/index.js";
+import { clearGuestSession } from "../shared/guest-auth.js";
 import { isCoachMessage, handleCoachMessage } from "./coach-router.js";
 import {
   addCodeSnapshot,
@@ -125,9 +126,13 @@ async function handleMessage(message, sender) {
       return { ok: true };
     case "CLEAR_ALL_LOCAL_DATA":
       await clearAllLocalData();
+      await clearGuestSession();
       return { ok: true };
     case "GET_ACTIVE_CONTEXT":
       return { ok: true, context: await getActiveContext() };
+    case "OPEN_SIDE_PANEL":
+      if (sender?.tab?.id) await chrome.sidePanel.open({ tabId: sender.tab.id });
+      return { ok: true };
     case "PAGE_CONTEXT_UPDATED":
       sendRuntimeMessage({ type: "PAGE_CONTEXT_UPDATED", context: message.context || {} });
       maybeSaveContextResultSnapshot(message.context || {}).catch(() => { });
@@ -924,7 +929,7 @@ async function streamOpenAi({ apiKey, model, instructions, inputText, maxOutputT
 function reasoningOptionsForModel(model) {
   const normalized = String(model || "").toLowerCase();
   if (normalized.startsWith("gpt-5")) {
-    return { effort: "minimal" };
+    return { effort: "low" };
   }
   return null;
 }

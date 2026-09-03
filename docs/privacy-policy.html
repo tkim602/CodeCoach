@@ -97,7 +97,7 @@ footer {
 
   <p class="meta">
     <strong>CodeCoach</strong> — Chrome Extension<br>
-    Last updated: 2026-06-20
+    Last updated: 2026-09-03
   </p>
 
   <p>
@@ -111,8 +111,11 @@ footer {
     <p>
       <strong>Important AI disclosure:</strong> When you request AI feedback, CodeCoach may send
       your typed question, current editor code, selected text, visible problem context, and run or
-      test-result messages from supported coding-practice pages to OpenAI API. This information is
-      used only to provide the hint, analysis, debugging guidance, note, or chat response you requested.
+      test-result messages from supported coding-practice pages to an AI coaching service. In BYOK
+      mode, the request goes directly from the extension to OpenAI using your OpenAI API key. In
+      guest mode, the request goes through the CodeCoach Firebase backend and then to OpenAI using
+      a CodeCoach-managed API key. This information is used only to provide the hint, analysis,
+      debugging guidance, note, or chat response you requested.
     </p>
   </div>
 
@@ -125,8 +128,9 @@ footer {
     <li>CodeCoach does not transfer user data to data brokers or information resellers.</li>
     <li>CodeCoach does not use third-party analytics SDKs or behavioral tracking.</li>
     <li>Most study data is stored locally in your browser using Chrome extension storage.</li>
-    <li>AI requests are sent directly from your browser to OpenAI using the API key you provide.</li>
-    <li>Optional sign-in and optional cloud sync use Firebase / Google services.</li>
+    <li>BYOK AI requests are sent directly from your browser to OpenAI using the API key you provide.</li>
+    <li>Guest AI requests are sent through the CodeCoach Firebase backend to enforce free-use quota, cost controls, and abuse protection.</li>
+    <li>Guest mode, optional sign-in, and optional cloud sync use Firebase / Google services.</li>
   </ul>
 
   <h2>1. Scope of this policy</h2>
@@ -161,7 +165,8 @@ footer {
   </p>
 
   <ul>
-    <li>Your OpenAI API key, if you choose to save it in the extension settings</li>
+    <li>Your OpenAI API key, if you choose to save it in the extension settings for BYOK mode</li>
+    <li>Firebase anonymous guest-session tokens when you use guest mode</li>
     <li>Extension settings, such as language, model, feature preferences, and display options</li>
     <li>Local study notes, wrong-answer notes, and review metadata</li>
     <li>Hint history, including timestamp, hint level, platform, programming language, and topic tags</li>
@@ -178,7 +183,8 @@ footer {
   <h3>3.2 Information used for AI requests</h3>
   <p>
     When you request an AI feature, such as a hint, code analysis, debugging help, note generation,
-    or chat response, CodeCoach may send the following information to OpenAI's API:
+    or chat response, CodeCoach may send the following information to OpenAI's API directly in
+    BYOK mode or through the CodeCoach backend in guest mode:
   </p>
 
   <ul>
@@ -186,14 +192,16 @@ footer {
     <li>Your current editor code from the supported coding-practice page</li>
     <li>Visible problem context from the supported coding-practice page, if included for that request or enabled in settings</li>
     <li>Selected text, selected code lines, run results, error messages, or test output, when used for the requested feature</li>
-    <li>Basic request metadata, such as platform name, programming language, hint level, and selected AI model</li>
+    <li>Basic request metadata, such as platform name, programming language, hint level, request type, and selected AI model where applicable</li>
   </ul>
 
   <p>
-    AI requests are sent directly from your browser to OpenAI using your own API key.
-    In the current version, the CodeCoach developer does not operate a separate backend proxy
-    for OpenAI requests and does not intentionally collect or maintain separate developer-operated
-    server logs of the content of your OpenAI requests.
+    BYOK AI requests are sent directly from your browser to OpenAI using your own API key.
+    Guest AI requests are sent to the CodeCoach Firebase backend, which validates the request,
+    enforces guest quota and abuse limits, constructs the AI prompt, and forwards the request
+    to OpenAI using a CodeCoach-managed API key. The guest backend may process request metadata
+    needed for quota, cost reservation, duplicate request protection, rate limiting, and abuse
+    prevention.
   </p>
 
   <p>
@@ -360,11 +368,13 @@ footer {
   <ul>
     <li>
       <strong>OpenAI:</strong> When you request an AI feature, CodeCoach sends the necessary prompt,
-      code, problem context, and related request data to OpenAI's API using the API key you provide.
+      code, problem context, and related request data to OpenAI's API. BYOK requests use the API
+      key you provide. Guest requests use the CodeCoach backend and a CodeCoach-managed API key.
     </li>
     <li>
       <strong>Firebase / Google:</strong> If you sign in or enable optional cloud sync, CodeCoach uses
-      Firebase / Google services for authentication and cloud-synced learning metadata.
+      Firebase / Google services for authentication and cloud-synced learning metadata. Guest mode
+      also uses Firebase anonymous authentication and Firestore quota records.
     </li>
     <li>
       <strong>Legal or safety reasons:</strong> CodeCoach may disclose information if required to comply
@@ -409,9 +419,9 @@ footer {
       <tr>
         <td>Google LLC, Google affiliates, and Firebase service providers</td>
         <td>United States and other countries where Google or Firebase processes data</td>
-        <td>Google sign-in information, Firebase user ID, email address, display name, profile image URL, authentication tokens, and optional cloud sync metadata</td>
-        <td>Provide optional Google sign-in, authentication, security, and optional Firebase cloud sync</td>
-        <td>Transferred over HTTPS when the user signs in, refreshes authentication, or uses optional cloud sync</td>
+        <td>Firebase anonymous guest user ID, guest authentication tokens, hashed IP-derived quota identifiers, guest request and cost counters, Google sign-in information, Firebase user ID, email address, display name, profile image URL, authentication tokens, and optional cloud sync metadata</td>
+        <td>Provide guest mode, quota and abuse protection, optional Google sign-in, authentication, security, and optional Firebase cloud sync</td>
+        <td>Transferred over HTTPS when the user starts guest mode, requests guest AI coaching, signs in, refreshes authentication, or uses optional cloud sync</td>
         <td>Retained while the account or sync feature is active, until the user deletes or requests deletion of the data, or as otherwise required by applicable law or provider policy</td>
       </tr>
     </tbody>
@@ -419,7 +429,7 @@ footer {
 
   <p>
     Users may refuse or avoid certain international transfers by not using optional Google sign-in,
-    not enabling cloud sync, not saving an API key, or not using AI features that require OpenAI API.
+    not using guest mode, not enabling cloud sync, not saving an API key, or not using AI features that require OpenAI API.
     However, refusing transfers necessary for a feature may limit or disable that feature.
   </p>
 
@@ -451,8 +461,8 @@ footer {
   </p>
 
   <p>
-    Required API endpoint access may include OpenAI API for user-requested AI features and
-    Firebase / Google APIs for optional authentication and optional cloud sync.
+    Required API endpoint access may include OpenAI API for user-requested BYOK AI features and
+    Firebase / Google APIs for guest mode, optional authentication, and optional cloud sync.
   </p>
 
   <h2>10. Chrome extension permissions</h2>
@@ -476,7 +486,7 @@ footer {
   <h2>11. Security</h2>
   <p>
     CodeCoach transmits external API requests only over HTTPS, including requests to
-    OpenAI API and Firebase / Google APIs. CodeCoach does not send user data over
+    OpenAI API, the CodeCoach guest backend, and Firebase / Google APIs. CodeCoach does not send user data over
     unencrypted HTTP connections.
   </p>
 
@@ -502,7 +512,7 @@ footer {
     </thead>
     <tbody>
       <tr>
-        <td>Local settings, API key, local notes, hint history, weakness metadata, and review metadata</td>
+        <td>Local settings, API key, guest-session tokens, local notes, hint history, weakness metadata, and review metadata</td>
         <td>Until the user deletes the data, clears Chrome extension storage, or uninstalls the extension</td>
       </tr>
       <tr>
@@ -514,8 +524,8 @@ footer {
         <td>Until the user disables sync, deletes synced data where supported, requests deletion, or closes the account</td>
       </tr>
       <tr>
-        <td>OpenAI API request data</td>
-        <td>Handled according to OpenAI's applicable policies and the user's API account or plan settings</td>
+        <td>OpenAI API request data and guest quota records</td>
+        <td>OpenAI request data is handled according to OpenAI's applicable policies. Guest quota records are retained as needed to enforce free-use limits, abuse protection, cost controls, and legal or security requirements.</td>
       </tr>
     </tbody>
   </table>
@@ -572,10 +582,11 @@ footer {
   </p>
 
   <p>
-    CodeCoach does not currently operate a separate developer-controlled backend that stores
-    OpenAI request content. If a future version adds a backend service, persistent server logs,
-    analytics SDKs, or additional processors, this policy will be updated before or at the time
-    those changes are released.
+    CodeCoach operates a Firebase backend for guest AI coaching. The guest backend validates
+    structured coaching requests, enforces quota and cost limits, and forwards allowed requests
+    to OpenAI. BYOK OpenAI requests continue to go directly from the extension to OpenAI.
+    If a future version adds persistent server logs, analytics SDKs, or additional processors,
+    this policy will be updated before or at the time those changes are released.
   </p>
 
   <h2>17. AI feature disclosure</h2>
@@ -589,6 +600,11 @@ footer {
     When you use an AI feature, the information sent to OpenAI is limited to what is needed
     to provide the requested response, such as your prompt, current code, selected text,
     visible problem context, and relevant run or test-result messages.
+  </p>
+
+  <p>
+    BYOK request path: <strong>CodeCoach extension → OpenAI</strong>.
+    Guest request path: <strong>CodeCoach extension → CodeCoach Firebase backend → OpenAI</strong>.
   </p>
 
   <h2>18. Children</h2>

@@ -1,8 +1,9 @@
 (function () {
   const POLL_MS = 2000;
-  const PLANNING_DELAY_MS = 15000;
+  const PLANNING_DELAY_MS = 35000;
+  const ACTIVE_EDIT_SUPPRESS_MS = 8000;
   const STUCK_DELAY_MS = 90000;
-  const NUDGE_COOLDOWN_MS = 5 * 60 * 1000;
+  const NUDGE_COOLDOWN_MS = 4 * 60 * 1000;
   const MAX_INTERVENTIONS_PER_PROBLEM = 3;
   const ACCENT = "#6128ff";
   const ACCENT_HOVER = "#6a3fff";
@@ -14,10 +15,13 @@
   let lastNudgeAt = 0;
   let interventions = 0;
   let activeReason = "";
+  let activeReasonKey = "";
   let activeRequestId = "";
   let activeContext = null;
   let lastFailedEventId = "";
+  let lastCloseEventId = "";
   let dismissedReasons = new Set();
+  let shownReasons = new Set();
   let host = null;
   let shadow = null;
   let bubble = null;
@@ -35,6 +39,12 @@
     if (message.type === "INLINE_AI_DONE") {
       const rawText = message.rawText || "";
       const visible = visibleAiText(rawText);
+      const metadata = parseMetadata(rawText);
+      if (metadata?.contains_solution_code || looksLikeFullCode(visible)) {
+        renderAnswer("I can’t show a full solution here. Try one smaller hint from the coach instead.", true, message.trial || null);
+        activeRequestId = "";
+        return false;
+      }
       renderAnswer(visible, true, message.trial || null);
       saveInlineHint(rawText, visible).catch(() => {});
       activeRequestId = "";
@@ -63,53 +73,68 @@
     const problemKey = context.problemUrl || context.url || "";
     if (problemKey && problemKey !== currentProblem) resetProblem(problemKey);
 
-    if (!context.allowed || !findEditor()) {
+    const editor = findEditor();
+    if (!context.allowed || !editor) {
       removeBubble();
       return;
     }
 
-    if (context.testResults?.status === "passed") {
-      removeBubble();
-      return;
-    }
-
+    const result = context.testResults || {};
     const signature = quickSignature(context.code || "");
+    if (result.status === "passed" && result.kind === "submit") {
+      removeBubble();
+      shownReasons.add("solved");
+      return;
+    }
+    if (result.status === "passed" && result.kind === "run") {
+      const closeEventId = result.eventId || `${signature}:${result.summary || "passed-run"}`;
+      if (closeEventId && closeEventId !== lastCloseEventId) {
+        lastCloseEventId = closeEventId;
+        maybeShow("close", context, closeEventId);
+      }
+      return;
+    }
+
     if (signature && signature !== lastCodeSignature) {
       if (lastCodeSignature) {
         lastProgressAt = Date.now();
-        if (activeReason === "stuck") removeBubble();
+        if (activeReason === "stuck" || activeReason === "failed") removeBubble();
       }
       lastCodeSignature = signature;
     }
 
-    const failedEventId = context.testResults?.status === "failed"
-      ? context.testResults?.eventId || `${signature}:${context.testResults?.summary || "failed"}`
+    const failedEventId = result.status === "failed"
+      ? result.eventId || `${signature}:${result.summary || "failed"}`
       : "";
     if (failedEventId && failedEventId !== lastFailedEventId) {
       lastFailedEventId = failedEventId;
-      maybeShow("failed", context);
+      maybeShow("failed", context, failedEventId);
       return;
     }
 
     const code = String(context.code || "").trim();
-    if (code.length <= 80 && Date.now() - problemOpenedAt >= PLANNING_DELAY_MS) {
+    const idleFor = Date.now() - lastProgressAt;
+    if (isStubLikeCode(code) && Date.now() - problemOpenedAt >= PLANNING_DELAY_MS && idleFor >= ACTIVE_EDIT_SUPPRESS_MS) {
       maybeShow("planning", context);
       return;
     }
 
-    if (code.length > 80 && Date.now() - lastProgressAt >= STUCK_DELAY_MS) {
+    if (!isStubLikeCode(code) && idleFor >= STUCK_DELAY_MS) {
       maybeShow("stuck", context);
     }
   }
 
-  function maybeShow(reason, context) {
-    if (bubble || dismissedReasons.has(reason)) return;
+  function maybeShow(reason, context, eventId = "") {
+    const reasonKey = eventId ? `${reason}:${eventId}` : reason;
+    if (bubble || dismissedReasons.has(reasonKey) || shownReasons.has(reasonKey)) return;
     if (interventions >= MAX_INTERVENTIONS_PER_PROBLEM) return;
     if (Date.now() - lastNudgeAt < NUDGE_COOLDOWN_MS && reason !== "failed") return;
     activeReason = reason;
+    activeReasonKey = reasonKey;
     activeContext = context;
     interventions += 1;
     lastNudgeAt = Date.now();
+    shownReasons.add(reasonKey);
     renderPrompt(reason);
   }
 
@@ -130,6 +155,12 @@
         <div class="cc-title">Submission failed.</div>
         <div class="cc-copy">Want one small debugging question, not the answer?</div>
         <div class="cc-actions"><button class="cc-primary" data-action="nudge">Debug this</button><button class="cc-ghost" data-action="dismiss">Dismiss</button></div>`;
+    } else if (reason === "close") {
+      body.innerHTML = `
+        <div class="cc-kicker">CODECOACH · EDGE CASE</div>
+        <div class="cc-title">Sample tests pass.</div>
+        <div class="cc-copy">Want one edge-case check before submitting?</div>
+        <div class="cc-actions"><button class="cc-primary" data-action="nudge">Check edge cases</button><button class="cc-ghost" data-action="dismiss">Dismiss</button></div>`;
     } else {
       body.innerHTML = `
         <div class="cc-kicker">CODECOACH · STUCK?</div>
@@ -143,7 +174,7 @@
 
   function wireActions() {
     bubble.querySelector("[data-action='dismiss']")?.addEventListener("click", () => {
-      dismissedReasons.add(activeReason);
+      dismissedReasons.add(activeReasonKey || activeReason);
       removeBubble();
     });
     bubble.querySelector("[data-action='nudge']")?.addEventListener("click", () => requestHint(1));
@@ -169,11 +200,19 @@
       context: {
         ...context,
         selectedLine: currentCursorLine(context) || context.selectedLine || "",
-        userNote: activeReason === "failed" ? "The learner just received a failed submission. Give one Socratic debugging question." : context.userNote || ""
+        userNote: activeReason === "failed"
+          ? "The learner just received a failed submission. Give one Socratic debugging question."
+          : activeReason === "close"
+            ? "Sample tests passed in a run. Give one Level-1 hidden/edge-case check before final submission."
+            : context.userNote || ""
       }
     }).catch((error) => ({ ok: false, error: error.message }));
     if (!response?.ok) {
       activeRequestId = "";
+      if (response?.code === "GUEST_NOT_STARTED") {
+        renderGuestStart(() => requestHint(level));
+        return;
+      }
       renderError(response?.error || "Start the guest trial or connect your OpenAI API key.");
     }
   }
@@ -195,23 +234,55 @@
     }).catch((error) => ({ ok: false, error: error.message }));
     if (!response?.ok) {
       activeRequestId = "";
+      if (response?.code === "GUEST_NOT_STARTED") {
+        renderGuestStart(() => requestApproachFeedback(userMessage));
+        return;
+      }
       renderError(response?.error || "Start the guest trial or connect your OpenAI API key.");
     }
+  }
+
+  function renderGuestStart(afterStart) {
+    ensureBubble();
+    bubble.querySelector(".cc-body").innerHTML = `
+      <div class="cc-kicker">CODECOACH · GUEST</div>
+      <div class="cc-title">Try free coaching.</div>
+      <div class="cc-copy">Start a private guest session and use one of 10 free AI questions.</div>
+      <div class="cc-actions"><button class="cc-primary" data-action="guest">Try free · 10 questions</button><button class="cc-ghost" data-action="close">Done</button></div>`;
+    bubble.querySelector("[data-action='guest']")?.addEventListener("click", async () => {
+      setBubbleBusy(true, "Starting...");
+      const response = await sendMessage({ type: "START_GUEST_TRIAL" }).catch((error) => ({ ok: false, error: error.message }));
+      if (!response?.ok) {
+        renderError(response?.error || "Guest mode is temporarily unavailable.");
+        return;
+      }
+      await afterStart();
+    });
+    bubble.querySelector("[data-action='close']")?.addEventListener("click", removeBubble);
+    positionBubble();
   }
 
   function renderAnswer(text, done, trial = null) {
     ensureBubble();
     const remaining = trial && Number.isFinite(Number(trial.remaining)) ? `<span class="cc-trial">Guest · ${trial.remaining} left</span>` : "";
+    const currentLevel = Number(bubble.dataset.level || 1);
+    const primaryAction = currentLevel >= 3
+      ? `<button class="cc-primary" data-action="open">Open coach</button>`
+      : `<button class="cc-primary" data-action="more">More specific</button>`;
     bubble.querySelector(".cc-body").innerHTML = `
       <div class="cc-kicker">CODECOACH</div>
       <div class="cc-answer">${escapeHtml(text || "Thinking...")}</div>
-      ${done ? `<div class="cc-actions"><button class="cc-primary" data-action="more">More specific</button><button class="cc-ghost" data-action="close">Done</button></div>${remaining}` : ""}`;
+      ${done ? `<div class="cc-actions">${primaryAction}<button class="cc-ghost" data-action="close">Done</button></div>${remaining}` : ""}`;
     if (done) {
       bubble.querySelector("[data-action='more']")?.addEventListener("click", () => {
         const currentLevel = Number(bubble.dataset.level || 1);
         const next = Math.min(3, currentLevel + 1);
         bubble.dataset.level = String(next);
         requestHint(next);
+      });
+      bubble.querySelector("[data-action='open']")?.addEventListener("click", () => {
+        sendMessage({ type: "OPEN_SIDE_PANEL" }).catch(() => {});
+        removeBubble();
       });
       bubble.querySelector("[data-action='close']")?.addEventListener("click", removeBubble);
     }
@@ -300,9 +371,25 @@
     const selectors = [".monaco-editor .cursor:not([style*='display: none'])", ".CodeMirror-cursor", ".ace_cursor"];
     for (const selector of selectors) {
       const node = document.querySelector(selector);
-      if (node && node.getBoundingClientRect().width >= 0) return node;
+      if (isUsableCursor(node)) return node;
     }
     return null;
+  }
+
+  function isUsableCursor(node) {
+    if (!node || !(node instanceof Element)) return false;
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    const rect = node.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) return false;
+    const editor = findEditor();
+    if (!editor) return false;
+    const editorRect = editor.getBoundingClientRect();
+    const margin = 24;
+    return rect.right >= editorRect.left - margin
+      && rect.left <= editorRect.right + margin
+      && rect.bottom >= editorRect.top - margin
+      && rect.top <= editorRect.bottom + margin;
   }
 
   function currentCursorLine(context) {
@@ -317,9 +404,11 @@
     lastProgressAt = Date.now();
     lastCodeSignature = "";
     lastFailedEventId = "";
+    lastCloseEventId = "";
     lastNudgeAt = 0;
     interventions = 0;
     dismissedReasons = new Set();
+    shownReasons = new Set();
     removeBubble();
   }
 
@@ -329,6 +418,7 @@
     shadow = null;
     bubble = null;
     activeReason = "";
+    activeReasonKey = "";
   }
 
   function quickSignature(text) {
@@ -341,8 +431,26 @@
     return `${value.length}:${hash >>> 0}`;
   }
 
+  function isStubLikeCode(code) {
+    const trimmed = String(code || "").trim();
+    if (!trimmed) return true;
+    const meaningfulLines = trimmed.split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !/^\/\/|^#/.test(line));
+    if (trimmed.length <= 80 && meaningfulLines.length <= 4) return true;
+    return /pass\s*$|return\s*\[\]\s*$|return\s+0\s*$|return\s+None\s*$/m.test(trimmed) && trimmed.length <= 180;
+  }
+
   function visibleAiText(raw) {
     return String(raw || "").split("---metadata---")[0].replace(/^(HINT:|COACH:)\s*/i, "").trim();
+  }
+
+  function looksLikeFullCode(text) {
+    const trimmed = String(text || "").trim();
+    if (/```/.test(trimmed)) return true;
+    if (/\bclass\s+Solution\b/.test(trimmed)) return true;
+    if (/^\s*(def|function|public|private|const|let|var)\s+/m.test(trimmed) && trimmed.split("\n").length > 6) return true;
+    return false;
   }
 
   function parseMetadata(raw) {

@@ -76,7 +76,6 @@ export async function handleCoachMessage(message, sender) {
 
 async function streamGuest({ message, sender, requestId, kind, context }) {
   const session = await ensureGuestSession();
-  const aiRequest = buildRequest(kind, message, context);
   const inline = message.type === "STREAM_INLINE_AI";
   sendToOrigin(sender, {
     type: inline ? "INLINE_AI_START" : "AI_STREAM_START",
@@ -94,8 +93,14 @@ async function streamGuest({ message, sender, requestId, kind, context }) {
     body: JSON.stringify({
       requestId,
       kind,
-      instructions: aiRequest.instructions,
-      inputText: aiRequest.inputText
+      hintLevel: message.hintLevel,
+      context,
+      userMessage: message.userMessage || "",
+      debugAction: message.debugAction || "",
+      testCases: message.testCases || [],
+      chatHistory: message.chatHistory || [],
+      analysisText: message.analysisText || "",
+      status: message.status || ""
     })
   });
   const payload = await response.json().catch(() => ({}));
@@ -127,7 +132,8 @@ async function streamInlineWithOwnKey({ message, sender, settings, requestId, ki
     store: false,
     max_output_tokens: maxOutputTokensFor(kind)
   };
-  if (String(model).startsWith("gpt-5")) body.reasoning = { effort: "minimal" };
+  const reasoning = reasoningOptionsForModel(model);
+  if (reasoning) body.reasoning = reasoning;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -192,6 +198,12 @@ function maxOutputTokensFor(kind) {
   if (kind === REQUEST_KINDS.analyze) return 1100;
   if (kind === REQUEST_KINDS.note) return 1400;
   return 900;
+}
+
+function reasoningOptionsForModel(model) {
+  const normalized = String(model || "").toLowerCase();
+  if (normalized.startsWith("gpt-5")) return { effort: "low" };
+  return null;
 }
 
 function extractResponseText(response) {
