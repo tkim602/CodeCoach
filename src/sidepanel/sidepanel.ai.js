@@ -1,3 +1,4 @@
+import "./guest-onboarding.js";
 import { REQUEST_KINDS } from "../shared/constants.js";
 import { parseMarkedAiOutput, visiblePortionFromPartial } from "../shared/prompts.js";
 import { normalizeTaxonomyMetadata } from "../shared/taxonomy/index.js";
@@ -37,7 +38,8 @@ export function createAiController({
 }) {
   async function startAiRequest(kind, userMessageText = "") {
     const state = getState();
-    if (!state.settings?.hasApiKey) {
+    const aiMode = await resolveAiMode(state.settings, sendMessage);
+    if (!aiMode) {
       writeOutput(t("apiMissingAction"));
       setActiveStreamState("");
       return;
@@ -45,33 +47,51 @@ export function createAiController({
 
     await syncActiveContext({ preserveUserEditedCode: false });
     const nextState = getState();
-    const context = buildCurrentContext();
+    const rawUserMessage = String(userMessageText || "");
+    const includeChatCode = kind !== REQUEST_KINDS.chatCoach || /(^|\s)@code\b/i.test(rawUserMessage);
+    const normalizedUserMessage = kind === REQUEST_KINDS.chatCoach
+      ? rawUserMessage.replace(/(^|\s)@code\b/gi, " ").replace(/\s{2,}/g, " ").trim()
+      : rawUserMessage;
+    let context = buildCurrentContext();
+
+    if (kind === REQUEST_KINDS.chatCoach && !includeChatCode) {
+      context = {
+        ...context,
+        code: "",
+        selectedLine: "",
+        selectedContext: ""
+      };
+    }
+
     if (!context.allowed) {
       writeOutputForKind(kind, context.reason || t("needsPractice"));
       return;
     }
-    if (!context.code.trim()) {
+    if (kind !== REQUEST_KINDS.chatCoach && !context.code.trim()) {
       writeOutputForKind(kind, t("noCode"));
+      return;
+    }
+    if (kind === REQUEST_KINDS.chatCoach && !normalizedUserMessage) {
+      writeOutputForKind(kind, t("emptyAi"));
       return;
     }
     if (kind === REQUEST_KINDS.explainLine && !context.selectedLine) {
       writeOutputForKind(kind, t("selectLine"));
       return;
     }
-    if (nextState.settings.confirmBeforeAi && !confirmAiRequest(context)) {
+    if (nextState.settings.confirmBeforeAi && !confirmAiRequest(context, aiMode)) {
       writeOutputForKind(kind, t("canceled"));
       return;
     }
-    if (userMessageText) {
+    if (normalizedUserMessage) {
       await saveCoachMessage({
         role: "user",
         kind,
-        text: userMessageText,
+        text: normalizedUserMessage,
         context
       });
     }
 
-    // Show one-time disclosure about OpenAI data transmission on first AI request
     if (!nextState.settings?.openaiDisclosureShown) {
       showToast(t("openaiDisclosureToast"), "info", documentRef);
       sendMessage({ type: "SAVE_SETTINGS", settings: { openaiDisclosureShown: true } }).catch(() => {});
@@ -79,7 +99,16 @@ export function createAiController({
     }
 
     const requestId = randomUUID();
-    const patch = { activeRequest: { requestId, kind, rawText: "", context } };
+    const patch = {
+      activeRequest: {
+        requestId,
+        kind,
+        rawText: "",
+        context,
+        userMessage: normalizedUserMessage,
+        aiMode
+      }
+    };
     if (kind === REQUEST_KINDS.note) patch.pendingNoteContext = null;
     setState(patch);
     clearOutputForKind(kind);
@@ -90,10 +119,11 @@ export function createAiController({
     let response;
     try {
       response = await sendMessage({
-        type: "STREAM_AI",
+        type: aiMode === "guest" ? "STREAM_GUEST_AI" : "STREAM_AI",
         requestId,
         kind,
         context,
+        userMessage: normalizedUserMessage,
         hintLevel: nextState.hintLevel,
         status: kind === REQUEST_KINDS.note ? noteStatusForCurrentProblem() : undefined,
         analysisText: nextState.lastAnalysis
@@ -155,6 +185,7 @@ export function createAiController({
 
   async function finishAiRequest() {
     const request = getState().activeRequest;
+    if (!request) return;
     const parsed = parseMarkedAiOutput(request.rawText);
     const visible = parsed.visible || visiblePortionFromPartial(request.rawText);
     const metadata = parsed.metadata || {};
@@ -203,8 +234,6 @@ export function createAiController({
 
     if (request.kind === REQUEST_KINDS.hint || request.kind === REQUEST_KINDS.nextCodeHint) {
       renderTags(metadata);
-    }
-    if (request.kind === REQUEST_KINDS.hint || request.kind === REQUEST_KINDS.nextCodeHint) {
       await saveHintMetadata(metadata, visible);
       await saveCoachMessage({
         role: "assistant",
@@ -247,7 +276,8 @@ export function createAiController({
 
   async function startCodeDiffRequest(group) {
     const state = getState();
-    if (!state.settings?.hasApiKey) {
+    const aiMode = await resolveAiMode(state.settings, sendMessage);
+    if (!aiMode) {
       writeOutput(t("apiMissingAction"));
       return;
     }
@@ -268,21 +298,21 @@ export function createAiController({
       passedSnapshot: pair.passed,
       responseLanguage: state.settings?.responseLanguage || "ko"
     };
-    if (state.settings.confirmBeforeAi && !confirmAiRequest(context)) {
+    if (state.settings.confirmBeforeAi && !confirmAiRequest(context, aiMode)) {
       elements.codeDiffState.textContent = t("canceled");
       return;
     }
     setState({ pendingDiffContext: context, lastCodeDiffReview: "" });
     openCodeDiffModal(group, pair);
     const requestId = randomUUID();
-    setState({ activeRequest: { requestId, kind: REQUEST_KINDS.codeDiff, rawText: "", context } });
+    setState({ activeRequest: { requestId, kind: REQUEST_KINDS.codeDiff, rawText: "", context, aiMode } });
     updateCodeDiffReview("");
     setActiveStreamState(t("starting"));
     setBusy(true);
     let response;
     try {
       response = await sendMessage({
-        type: "STREAM_AI",
+        type: aiMode === "guest" ? "STREAM_GUEST_AI" : "STREAM_AI",
         requestId,
         kind: REQUEST_KINDS.codeDiff,
         context
@@ -370,7 +400,6 @@ export function createAiController({
 
   function renderTags(metadataOrCategories) {
     elements.metadataTags.innerHTML = "";
-    // Tags are saved in metadata but not displayed in the chat UI
   }
 
   function tagsForDisplay(metadataOrCategories) {
@@ -398,10 +427,11 @@ export function createAiController({
     return [...problemTags, ...cautionTags, ...implementationTags];
   }
 
-  function confirmAiRequest(context) {
+  function confirmAiRequest(context, aiMode) {
     const selected = context.selectedContext ? "selected visible context, " : "";
     const problemContext = context.problemContext ? "short visible problem context, " : "";
-    return confirmRef(`This request may send your current code, ${selected}${problemContext}selected line, and note to OpenAI using your own API key. Continue?`);
+    const billing = aiMode === "guest" ? "the CodeCoach guest trial" : "your own OpenAI API key";
+    return confirmRef(`This request may send your current code, ${selected}${problemContext}selected line, and note to the AI coaching service using ${billing}. Continue?`);
   }
 
   return {
@@ -414,6 +444,15 @@ export function createAiController({
     startCodeDiffRequest,
     writeOutputForKind
   };
+}
+
+async function resolveAiMode(settings, sendMessage) {
+  if (settings?.hasApiKey) return "byok";
+  const response = await sendMessage({ type: "GET_GUEST_STATUS" }).catch(() => null);
+  if (!response?.enabled) return "";
+  const remaining = response.trial?.remaining;
+  if (remaining === 0) return "";
+  return "guest";
 }
 
 export function looksLikeFullCode(text) {
