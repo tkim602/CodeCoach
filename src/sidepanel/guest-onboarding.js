@@ -20,7 +20,13 @@ async function bootGuestOnboarding() {
     guestTrial = response.trial || null;
     suppressAutomaticModalOnce = true;
     renderGuestStatus();
-    observeFirstRunModal();
+    const modal = document.getElementById("apikey-modal");
+    if (modal && !modal.hidden) {
+      modal.hidden = true;
+      suppressAutomaticModalOnce = false;
+    } else {
+      observeFirstRunModal();
+    }
   }
 }
 
@@ -63,7 +69,8 @@ function installGuestChoice() {
     guestTrial = response.trial || { remaining: 10, limit: 10, used: 0 };
     note.textContent = "Guest mode is ready.";
     renderGuestStatus();
-    document.getElementById("apikey-modal")?.setAttribute("hidden", "");
+    const modal = document.getElementById("apikey-modal");
+    if (modal) modal.hidden = true;
   });
 }
 
@@ -80,6 +87,14 @@ function renderGuestStatus() {
   const remaining = Number.isFinite(Number(guestTrial?.remaining)) ? Number(guestTrial.remaining) : 10;
   badge.textContent = remaining > 0 ? `Guest · ${remaining} left` : "Guest trial used · add API key";
   badge.classList.toggle("is-empty", remaining <= 0);
+
+  const button = document.getElementById("apikey-guest-continue");
+  if (button) {
+    button.disabled = remaining <= 0;
+    button.innerHTML = remaining > 0
+      ? `<strong>Guest mode active</strong><span>${remaining} of 10 AI questions left</span>`
+      : `<strong>Guest trial used</strong><span>Connect your OpenAI API key to continue</span>`;
+  }
 
   const note = document.getElementById("apikey-guest-note");
   if (note) note.textContent = remaining > 0 ? `Guest trial active · ${remaining} questions left` : "Guest trial used. Connect your OpenAI API key to continue.";
