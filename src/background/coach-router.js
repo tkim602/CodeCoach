@@ -5,66 +5,64 @@ import { ensureGuestSession, getGuestSession } from "../shared/guest-auth.js";
 import { redactSensitiveText } from "../shared/openaiErrors.js";
 
 const GUEST_ENDPOINT = "https://us-central1-ai-hint-coach.cloudfunctions.net/guestCoach";
+const COACH_MESSAGE_TYPES = new Set(["START_GUEST_TRIAL", "GET_GUEST_STATUS", "STREAM_GUEST_AI", "STREAM_INLINE_AI"]);
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!["START_GUEST_TRIAL", "GET_GUEST_STATUS", "STREAM_GUEST_AI", "STREAM_INLINE_AI"].includes(message?.type)) {
-    return false;
-  }
+export function isCoachMessage(message) {
+  return COACH_MESSAGE_TYPES.has(message?.type);
+}
 
-  handleCoachMessage(message, sender)
-    .then((response) => sendResponse(response))
-    .catch((error) => sendResponse({ ok: false, error: redactSensitiveText(error.message || String(error)) }));
-  return true;
-});
-
-async function handleCoachMessage(message, sender) {
-  if (message.type === "START_GUEST_TRIAL") {
-    await ensureGuestSession();
-    return { ok: true, trial: await fetchGuestStatus() };
-  }
-
-  if (message.type === "GET_GUEST_STATUS") {
-    const session = await getGuestSession();
-    if (!session) return { ok: true, enabled: false, trial: null };
-    try {
-      return { ok: true, enabled: true, trial: await fetchGuestStatus() };
-    } catch {
-      return { ok: true, enabled: true, trial: null };
+export async function handleCoachMessage(message, sender) {
+  try {
+    if (message.type === "START_GUEST_TRIAL") {
+      await ensureGuestSession();
+      return { ok: true, trial: await fetchGuestStatus() };
     }
-  }
 
-  const settings = await getSettings();
-  const requestId = message.requestId || crypto.randomUUID();
-  const kind = message.kind || REQUEST_KINDS.hint;
-  const context = {
-    ...(message.context || {}),
-    responseLanguage: settings.responseLanguage || "auto"
-  };
-  ensureContextAllowed(settings, context);
+    if (message.type === "GET_GUEST_STATUS") {
+      const session = await getGuestSession();
+      if (!session) return { ok: true, enabled: false, trial: null };
+      try {
+        return { ok: true, enabled: true, trial: await fetchGuestStatus() };
+      } catch {
+        return { ok: true, enabled: true, trial: null };
+      }
+    }
 
-  if (message.type === "STREAM_INLINE_AI" && settings.apiKey) {
-    streamInlineWithOwnKey({ message, sender, settings, requestId, kind, context }).catch((error) => {
+    const settings = await getSettings();
+    const requestId = message.requestId || crypto.randomUUID();
+    const kind = message.kind || REQUEST_KINDS.hint;
+    const context = {
+      ...(message.context || {}),
+      responseLanguage: settings.responseLanguage || "auto"
+    };
+    ensureContextAllowed(settings, context);
+
+    if (message.type === "STREAM_INLINE_AI" && settings.apiKey) {
+      streamInlineWithOwnKey({ message, sender, settings, requestId, kind, context }).catch((error) => {
+        sendToOrigin(sender, {
+          type: "INLINE_AI_ERROR",
+          requestId,
+          error: redactSensitiveText(error.message || String(error))
+        });
+      });
+      return { ok: true, mode: "byok" };
+    }
+
+    const session = await getGuestSession();
+    if (!session) return { ok: false, code: "GUEST_NOT_STARTED", error: "Start the guest trial or connect an OpenAI API key." };
+
+    streamGuest({ message, sender, requestId, kind, context }).catch((error) => {
+      const eventType = message.type === "STREAM_INLINE_AI" ? "INLINE_AI_ERROR" : "AI_STREAM_ERROR";
       sendToOrigin(sender, {
-        type: "INLINE_AI_ERROR",
+        type: eventType,
         requestId,
         error: redactSensitiveText(error.message || String(error))
       });
     });
-    return { ok: true, mode: "byok" };
+    return { ok: true, mode: "guest" };
+  } catch (error) {
+    return { ok: false, error: redactSensitiveText(error.message || String(error)) };
   }
-
-  const session = await getGuestSession();
-  if (!session) return { ok: false, code: "GUEST_NOT_STARTED", error: "Start the guest trial or connect an OpenAI API key." };
-
-  streamGuest({ message, sender, requestId, kind, context }).catch((error) => {
-    const eventType = message.type === "STREAM_INLINE_AI" ? "INLINE_AI_ERROR" : "AI_STREAM_ERROR";
-    sendToOrigin(sender, {
-      type: eventType,
-      requestId,
-      error: redactSensitiveText(error.message || String(error))
-    });
-  });
-  return { ok: true, mode: "guest" };
 }
 
 async function streamGuest({ message, sender, requestId, kind, context }) {
@@ -109,7 +107,18 @@ async function streamGuest({ message, sender, requestId, kind, context }) {
 
 async function streamInlineWithOwnKey({ message, sender, settings, requestId, kind, context }) {
   const aiRequest = buildRequest(kind, message, context);
-  sendToOrigin(sender, { type: "INLINE_AI_START", requestId, kind, model: pickModel(kind, settings) });
+  const model = pickModel(kind, settings);
+  sendToOrigin(sender, { type: "INLINE_AI_START", requestId, kind, model });
+
+  const body = {
+    model,
+    instructions: aiRequest.instructions,
+    input: [{ role: "user", content: [{ type: "input_text", text: aiRequest.inputText }] }],
+    stream: false,
+    store: false,
+    max_output_tokens: maxOutputTokensFor(kind)
+  };
+  if (String(model).startsWith("gpt-5")) body.reasoning = { effort: "minimal" };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -117,22 +126,14 @@ async function streamInlineWithOwnKey({ message, sender, settings, requestId, ki
       Authorization: `Bearer ${settings.apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model: pickModel(kind, settings),
-      instructions: aiRequest.instructions,
-      input: [{ role: "user", content: [{ type: "input_text", text: aiRequest.inputText }] }],
-      reasoning: String(pickModel(kind, settings)).startsWith("gpt-5") ? { effort: "minimal" } : undefined,
-      stream: false,
-      store: false,
-      max_output_tokens: maxOutputTokensFor(kind)
-    })
+    body: JSON.stringify(body)
   });
   if (!response.ok) throw new Error(`OpenAI request failed (${response.status}).`);
-  const body = await response.json();
-  const text = extractResponseText(body);
+  const responseBody = await response.json();
+  const text = extractResponseText(responseBody);
   if (!text.trim()) throw new Error("OpenAI returned an empty response.");
   sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta: text, rawText: text });
-  sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText: text, kind, model: pickModel(kind, settings) });
+  sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText: text, kind, model });
 }
 
 async function fetchGuestStatus() {
