@@ -1,5 +1,5 @@
-// Page-world bridge for editor-native CodeCoach nudges.
-// Reads public editor APIs and never changes the user's code model.
+// Page-world bridge for editor-local CodeCoach nudges.
+// Uses visible DOM overlays anchored to editor coordinates and never mutates source code.
 (function () {
   if (window.__codeCoachInlineNudgeBridge) return;
   window.__codeCoachInlineNudgeBridge = true;
@@ -14,15 +14,15 @@
   let editorRef = null;
   let editorType = "";
   let subscriptions = [];
+  let resizeObserver = null;
+  let currentToken = "";
+  let activeLine = 1;
+  let ghostHost = null;
+  let controlsHost = null;
+  let syncFrame = 0;
   let lastChangeAt = 0;
   let focused = false;
   let cursorLine = 1;
-  let currentToken = "";
-  let activeLine = 1;
-  let presentation = null;
-  let controlsHost = null;
-  let resizeObserver = null;
-  let syncFrame = 0;
 
   installStyles();
 
@@ -31,25 +31,19 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      .monaco-editor .codecoach-inline-ghost,
-      .CodeMirror .codecoach-inline-ghost,
-      .ace_editor .codecoach-inline-ghost,
-      .codecoach-inline-ghost-overlay {
-        color: var(--vscode-editorGhostText-foreground, rgba(143, 148, 160, .88));
-        font-style: italic;
-        opacity: .92;
-        white-space: pre-wrap;
-      }
       .codecoach-inline-ghost-overlay {
         position: absolute;
-        z-index: 7;
+        z-index: 2147483000;
         max-width: calc(100% - 24px);
-        pointer-events: none;
+        color: var(--vscode-editorGhostText-foreground, rgba(143, 148, 160, .92));
         font: italic 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        pointer-events: none;
+        user-select: none;
       }
       .codecoach-inline-controls {
         position: absolute;
-        z-index: 8;
+        z-index: 2147483001;
         display: flex;
         align-items: center;
         flex-wrap: wrap;
@@ -57,8 +51,8 @@
         max-width: calc(100% - 24px);
         padding: 3px 5px;
         border-radius: 5px;
-        background: rgba(24, 25, 29, .94);
-        color: rgba(238, 239, 243, .92);
+        background: rgba(24, 25, 29, .96);
+        color: rgba(238, 239, 243, .94);
         font: 11px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         pointer-events: auto;
       }
@@ -90,29 +84,34 @@
       .monaco-editor.vs .codecoach-inline-controls,
       .monaco-editor.hc-light .codecoach-inline-controls,
       .CodeMirror.CodeMirror-light .codecoach-inline-controls {
-        background: rgba(250, 250, 252, .96);
+        background: rgba(250, 250, 252, .97);
         color: #34363d;
         border: 1px solid rgba(36, 38, 45, .14);
       }
     `;
-    document.head.appendChild(style);
+    (document.head || document.documentElement).appendChild(style);
   }
 
   function disposeSubscriptions() {
-    subscriptions.forEach((dispose) => {
+    for (const dispose of subscriptions) {
       try {
         if (typeof dispose === "function") dispose();
         else dispose?.dispose?.();
       } catch {}
-    });
+    }
     subscriptions = [];
     resizeObserver?.disconnect?.();
     resizeObserver = null;
   }
 
+  function subscribeEvent(target, eventName, handler) {
+    target?.on?.(eventName, handler);
+    subscriptions.push(() => target?.off?.(eventName, handler));
+  }
+
   function registerEditor(nextEditor, type) {
     if (!nextEditor || (editorRef === nextEditor && editorType === type)) return;
-    hideInline();
+    clearPresentation();
     disposeSubscriptions();
     editorRef = nextEditor;
     editorType = type;
@@ -121,10 +120,11 @@
     cursorLine = readCursorLine();
 
     if (type === "monaco") {
-      subscriptions.push(nextEditor.onDidChangeModelContent?.(() => markChanged()));
+      subscriptions.push(nextEditor.onDidChangeModelContent?.(markChanged));
       subscriptions.push(nextEditor.onDidChangeCursorPosition?.((event) => {
         cursorLine = Math.max(1, Number(event?.position?.lineNumber) || 1);
         postActivity();
+        scheduleSync();
       }));
       subscriptions.push(nextEditor.onDidFocusEditorText?.(() => { focused = true; postActivity(); }));
       subscriptions.push(nextEditor.onDidBlurEditorText?.(() => { focused = false; postActivity(); }));
@@ -132,14 +132,14 @@
       subscriptions.push(nextEditor.onDidLayoutChange?.(scheduleSync));
     } else if (type === "codemirror") {
       subscribeEvent(nextEditor, "change", markChanged);
-      subscribeEvent(nextEditor, "cursorActivity", () => { cursorLine = readCursorLine(); postActivity(); });
+      subscribeEvent(nextEditor, "cursorActivity", () => { cursorLine = readCursorLine(); postActivity(); scheduleSync(); });
       subscribeEvent(nextEditor, "focus", () => { focused = true; postActivity(); });
       subscribeEvent(nextEditor, "blur", () => { focused = false; postActivity(); });
       subscribeEvent(nextEditor, "scroll", scheduleSync);
       subscribeEvent(nextEditor, "refresh", scheduleSync);
     } else if (type === "ace") {
       subscribeEvent(nextEditor.session, "change", markChanged);
-      subscribeEvent(nextEditor.selection, "changeCursor", () => { cursorLine = readCursorLine(); postActivity(); });
+      subscribeEvent(nextEditor.selection, "changeCursor", () => { cursorLine = readCursorLine(); postActivity(); scheduleSync(); });
       subscribeEvent(nextEditor, "focus", () => { focused = true; postActivity(); });
       subscribeEvent(nextEditor, "blur", () => { focused = false; postActivity(); });
       subscribeEvent(nextEditor.renderer, "afterRender", scheduleSync);
@@ -152,11 +152,6 @@
       resizeObserver.observe(container);
     }
     postActivity();
-  }
-
-  function subscribeEvent(target, eventName, handler) {
-    target?.on?.(eventName, handler);
-    subscriptions.push(() => target?.off?.(eventName, handler));
   }
 
   function markChanged() {
@@ -201,8 +196,8 @@
   function readCursorLine() {
     try {
       if (editorType === "monaco") return Math.max(1, Number(editorRef?.getPosition?.()?.lineNumber) || 1);
-      if (editorType === "codemirror") return Math.max(1, Number(editorRef?.getCursor?.()?.line) + 1 || 1);
-      if (editorType === "ace") return Math.max(1, Number(editorRef?.getCursorPosition?.()?.row) + 1 || 1);
+      if (editorType === "codemirror") return Math.max(1, (Number(editorRef?.getCursor?.()?.line) || 0) + 1);
+      if (editorType === "ace") return Math.max(1, (Number(editorRef?.getCursorPosition?.()?.row) || 0) + 1);
     } catch {}
     return 1;
   }
@@ -254,14 +249,6 @@
       .trim();
   }
 
-  function createGhostNode(view, overlay = false) {
-    const ghost = document.createElement("span");
-    ghost.className = overlay ? "codecoach-inline-ghost-overlay" : "codecoach-inline-ghost";
-    ghost.textContent = `  ${ghostText(view)}`;
-    ghost.dataset.codecoachInlineUi = "1";
-    return ghost;
-  }
-
   function createControls(view) {
     const actions = [
       [view?.primaryAction, view?.primaryLabel],
@@ -293,7 +280,7 @@
       root.appendChild(input);
     }
 
-    actions.forEach(([action, label]) => {
+    for (const [action, label] of actions) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = label;
@@ -304,7 +291,7 @@
         emitAction(action, input?.value || "");
       });
       root.appendChild(button);
-    });
+    }
 
     if (view?.trialText) {
       const trial = document.createElement("span");
@@ -313,7 +300,9 @@
       root.appendChild(trial);
     }
 
-    if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
+    if (input) setTimeout(() => {
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+    }, 0);
     return root;
   }
 
@@ -329,81 +318,33 @@
   function showInline(payload) {
     discoverEditor();
     if (!editorRef) return;
-
     clearPresentation();
     currentToken = payload?.token || "";
-    const view = payload?.view || {};
     activeLine = Math.min(readLineCount(), Math.max(1, Number(payload?.lineNumber) || readCursorLine()));
-
-    if (editorType === "monaco" && showMonaco(view, activeLine)) return;
-    if (editorType === "codemirror" && showCodeMirror(view, activeLine)) return;
-    showCoordinateOverlay(view, activeLine);
+    mountVisiblePresentation(payload?.view || {});
   }
 
-  function showMonaco(view, line) {
-    try {
-      const model = editorRef.getModel?.();
-      const Range = window.monaco?.Range;
-      if (!model?.deltaDecorations || !Range) return false;
-      const column = lineEndColumn(line);
-      const decoration = {
-        range: new Range(line, column, line, column),
-        options: {
-          after: {
-            content: `  ${ghostText(view)}`,
-            inlineClassName: "codecoach-inline-ghost"
-          },
-          showIfCollapsed: true
-        }
-      };
-      const decorationIds = model.deltaDecorations([], [decoration]) || [];
-      presentation = { type: "monaco", model, decorationIds };
-      mountControls(view);
-      scheduleSync();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function showCodeMirror(view, line) {
-    if (!editorRef?.setBookmark) return false;
-    try {
-      const ghost = createGhostNode(view);
-      const marker = editorRef.setBookmark(
-        { line: line - 1, ch: lineEndColumn(line) },
-        { widget: ghost, insertLeft: false, handleMouseEvents: false }
-      );
-      presentation = { type: "codemirror", marker, ghost };
-      mountControls(view);
-      scheduleSync();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function showCoordinateOverlay(view, line) {
+  function mountVisiblePresentation(view) {
     const container = editorContainer();
     if (!container) return;
-    const ghost = createGhostNode(view, true);
-    container.appendChild(ghost);
-    presentation = { type: "overlay", ghost };
-    mountControls(view);
-    positionInline();
-  }
 
-  function mountControls(view) {
-    const container = editorContainer();
-    if (!container) return;
+    // Keep the nudge as a real DOM node. Monaco injected-text decorations can report
+    // success while remaining invisible in host wrappers, which caused live LeetCode
+    // nudges to disappear after PR #7.
+    ghostHost = document.createElement("span");
+    ghostHost.className = "codecoach-inline-ghost-overlay";
+    ghostHost.dataset.codecoachInlineUi = "1";
+    ghostHost.textContent = `  ${ghostText(view)}`;
+    container.appendChild(ghostHost);
+
     controlsHost = createControls(view);
-    if (!controlsHost) return;
-    container.appendChild(controlsHost);
+    if (controlsHost) container.appendChild(controlsHost);
+    positionInline();
     scheduleSync();
   }
 
   function scheduleSync() {
-    if (!presentation || syncFrame) return;
+    if (!ghostHost || syncFrame) return;
     const run = () => {
       syncFrame = 0;
       positionInline();
@@ -413,33 +354,20 @@
 
   function positionInline() {
     const container = editorContainer();
-    if (!container || !presentation) return;
-    const containerRect = container.getBoundingClientRect();
-    let left = 12;
-    let top = 24;
+    if (!container || !ghostHost) return;
+    const rect = container.getBoundingClientRect();
+    const coordinates = editorCoordinates(activeLine);
+    if (!coordinates) return;
 
-    const ghostRect = presentation.ghost?.isConnected ? presentation.ghost.getBoundingClientRect() : null;
-    if (ghostRect && (ghostRect.width || ghostRect.height)) {
-      left = ghostRect.left - containerRect.left;
-      top = ghostRect.bottom - containerRect.top + 3;
-    } else {
-      const coordinates = editorCoordinates(activeLine);
-      if (coordinates) {
-        left = coordinates.left;
-        top = coordinates.top + coordinates.height + 3;
-      }
-    }
+    const left = Math.max(8, Math.min(coordinates.left, Math.max(8, rect.width - 180)));
+    const lineTop = Math.max(2, Math.min(coordinates.top, Math.max(2, rect.height - 24)));
+    ghostHost.style.left = `${left}px`;
+    ghostHost.style.top = `${lineTop}px`;
 
-    left = Math.max(8, Math.min(left, Math.max(8, containerRect.width - 160)));
-    top = Math.max(4, Math.min(top, Math.max(4, containerRect.height - 34)));
-
-    if (presentation.type === "overlay" && presentation.ghost) {
-      presentation.ghost.style.left = `${left}px`;
-      presentation.ghost.style.top = `${Math.max(2, top - 21)}px`;
-    }
     if (controlsHost) {
+      const controlsTop = Math.max(4, Math.min(lineTop + coordinates.height + 3, Math.max(4, rect.height - 34)));
       controlsHost.style.left = `${left}px`;
-      controlsHost.style.top = `${top}px`;
+      controlsHost.style.top = `${controlsTop}px`;
     }
   }
 
@@ -465,7 +393,7 @@
         }
       }
     } catch {}
-    return null;
+    return { left: 12, top: 24, height: 18 };
   }
 
   function editorContainer() {
@@ -483,13 +411,9 @@
       window.clearTimeout(syncFrame);
       syncFrame = 0;
     }
-    try {
-      if (presentation?.type === "monaco") presentation.model.deltaDecorations?.(presentation.decorationIds || [], []);
-      if (presentation?.type === "codemirror") presentation.marker?.clear?.();
-    } catch {}
-    presentation?.ghost?.remove?.();
+    ghostHost?.remove?.();
     controlsHost?.remove?.();
-    presentation = null;
+    ghostHost = null;
     controlsHost = null;
   }
 
