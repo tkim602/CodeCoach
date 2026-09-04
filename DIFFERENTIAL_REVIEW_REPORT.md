@@ -1,7 +1,9 @@
 # Differential Review: PR #7
 
-Date: 2026-09-04  
-Base: `011cece` (`origin/main`)  
+Date: 2026-09-04
+
+Base: `011cece` (`origin/main`)
+
 Reviewed head: `318aa3a` plus this report and README correction
 
 ## Executive Summary
