@@ -23,6 +23,7 @@ jobs:
       - name: Check extension JavaScript syntax
         run: |
           node --check src/background/coach-router.js
+          node --check src/background/coach-stream.js
           node --check src/background/service-worker.js
           node --check src/shared/guest-auth.js
           node --check src/content/proactive-coach.js

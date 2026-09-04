@@ -4,6 +4,7 @@ import { getAllLearningData, getSettings } from "../shared/storage.js";
 import { chatHistoryForContext } from "../shared/chatThreads.js";
 import { ensureGuestSession, getGuestSession } from "../shared/guest-auth.js";
 import { redactSensitiveText } from "../shared/openaiErrors.js";
+import { createSseTextParser, progressiveTextParts } from "./coach-stream.js";
 
 const GUEST_ENDPOINT = "https://us-central1-ai-hint-coach.cloudfunctions.net/guestCoach";
 const COACH_MESSAGE_TYPES = new Set(["START_GUEST_TRIAL", "GET_GUEST_STATUS", "STREAM_GUEST_AI", "STREAM_INLINE_AI"]);
@@ -153,29 +154,29 @@ async function streamInlineWithOwnKey({ message, sender, settings, requestId, ki
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  const parser = createSseTextParser();
   let rawText = "";
+
+  const emitDelta = (delta) => {
+    if (!delta) return;
+    rawText += delta;
+    sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta, rawText });
+  };
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split("\n\n");
-    buffer = chunks.pop() || "";
-    for (const chunk of chunks) {
-      const delta = parseOutputTextDelta(chunk);
-      if (!delta) continue;
-      rawText += delta;
-      sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta, rawText });
-    }
+    emitDelta(parser.push(decoder.decode(value, { stream: true })));
   }
+  emitDelta(parser.push(decoder.decode()));
+  emitDelta(parser.finish());
 
   if (!rawText.trim()) throw new Error("OpenAI returned an empty response.");
   sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText, kind, model });
 }
 
 async function emitProgressiveText(sender, { requestId, text, eventType }) {
-  const parts = String(text || "").match(/\S+\s*|\s+/g) || [];
+  const parts = progressiveTextParts(text);
   let rawText = "";
   for (let index = 0; index < parts.length; index += 1) {
     const delta = parts[index];
@@ -194,24 +195,6 @@ function progressiveDelay(delta) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseOutputTextDelta(chunk) {
-  const dataLines = String(chunk || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trim());
-
-  let delta = "";
-  for (const line of dataLines) {
-    if (!line || line === "[DONE]") continue;
-    try {
-      const event = JSON.parse(line);
-      if (event.type === "response.output_text.delta") delta += event.delta || "";
-    } catch {}
-  }
-  return delta;
 }
 
 async function fetchGuestStatus() {
