@@ -158,7 +158,7 @@ Before publishing a build that enables guest AI, verify the Firebase project use
 - [LeetCode](https://leetcode.com/problemset/)
 - [Programmers / 프로그래머스](https://school.programmers.co.kr/learn/challenges)
 
-The current Chrome Web Store release is version `1.0.0`.
+The current Chrome Web Store release is version `1.1.0`.
 
 ## Tech stack
 
