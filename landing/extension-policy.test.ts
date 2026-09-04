@@ -80,4 +80,11 @@ describe("extension AI access and privacy policy", () => {
     expect(composer).not.toContain("dispatchFreeChat");
     expect(composer).not.toContain("GET_GUEST_STATUS");
   });
+
+  it("runs dependency-free guest policy tests without reinstalling Firebase packages", () => {
+    const workflow = read(".github/workflows/proactive-coach.yml");
+    expect(workflow).toContain("working-directory: functions");
+    expect(workflow).toContain("run: npm test");
+    expect(workflow).not.toContain("npm install --ignore-scripts --package-lock=false");
+  });
 });

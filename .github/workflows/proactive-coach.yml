@@ -37,6 +37,4 @@ jobs:
           node --check src/sidepanel/sidepanel.composer.js
       - name: Test guest quota and cost policy
         working-directory: functions
-        run: |
-          npm install --ignore-scripts --package-lock=false
-          npm test
+        run: npm test
