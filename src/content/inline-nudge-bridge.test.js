@@ -76,7 +76,7 @@ describe("inline nudge page bridge", () => {
   });
 
   it("mounts the same visible overlay for CodeMirror", () => {
-    const wrapper = createContainer("CodeMirror");
+    const wrapper = createContainer("CodeMirror", { left: 40, top: 60, width: 500, height: 300 });
     wrapper.CodeMirror = {
       getValue: () => "code",
       getCursor: () => ({ line: 2, ch: 4 }),
@@ -84,7 +84,7 @@ describe("inline nudge page bridge", () => {
       lineCount: () => 6,
       hasFocus: () => true,
       getWrapperElement: () => wrapper,
-      cursorCoords: () => ({ left: 90, top: 40, bottom: 58 }),
+      cursorCoords: () => ({ left: 130, top: 100, bottom: 118 }),
       on: vi.fn(),
       off: vi.fn()
     };
@@ -95,7 +95,11 @@ describe("inline nudge page bridge", () => {
     const ghost = wrapper.querySelector(".codecoach-inline-ghost-overlay");
     expect(ghost).not.toBeNull();
     expect(ghost.style.left).toBe("90px");
-    expect(wrapper.querySelector(".codecoach-inline-controls")).not.toBeNull();
+    expect(ghost.style.top).toBe("40px");
+    const controls = wrapper.querySelector(".codecoach-inline-controls");
+    expect(controls).not.toBeNull();
+    expect(getComputedStyle(controls).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    expect(getComputedStyle(controls).padding).toBe("0px");
 
     dispatchWindowMessage({ source: "CODING_HINT_COACH_INLINE_HIDE" });
     expect(wrapper.querySelector(".codecoach-inline-ghost-overlay")).toBeNull();

@@ -1,9 +1,9 @@
 (function () {
   const POLL_MS = 1500;
-  const PLANNING_DELAY_MS = 35_000;
+  const OPENING_PROMPT_DELAY_MS = 1_500;
   const ACTIVE_EDIT_SUPPRESS_MS = 10_000;
-  const STUCK_DELAY_MS = 90_000;
-  const NUDGE_COOLDOWN_MS = 4 * 60_000;
+  const STUCK_DELAY_MS = 45_000;
+  const NUDGE_COOLDOWN_MS = 2 * 60_000;
   const MAX_INTERVENTIONS_PER_PROBLEM = 3;
   const SOURCE_RENDER = "CODING_HINT_COACH_INLINE_RENDER";
   const SOURCE_HIDE = "CODING_HINT_COACH_INLINE_HIDE";
@@ -87,7 +87,7 @@
 
   refreshSettings().catch(() => {});
   requestEditorActivity();
-  setTimeout(checkCoachState, 2200);
+  setTimeout(checkCoachState, 0);
   setInterval(checkCoachState, POLL_MS);
 
   async function checkCoachState() {
@@ -142,24 +142,21 @@
     const failedEventId = result.status === "failed"
       ? result.eventId || `${signature}:${result.summary || "failed"}`
       : "";
-    if (failedEventId && failedEventId !== lastFailedEventId && idleFor >= 1200) {
+    if (failedEventId && failedEventId !== lastFailedEventId) {
       lastFailedEventId = failedEventId;
       maybeShow("failed", context, failedEventId);
       return;
     }
 
-    const code = String(context.code || "").trim();
-    const activelyEditing = editorActivity.focused && idleFor < ACTIVE_EDIT_SUPPRESS_MS;
-    if (activelyEditing) return;
-
-    if (isStubLikeCode(code) && Date.now() - problemOpenedAt >= PLANNING_DELAY_MS && idleFor >= ACTIVE_EDIT_SUPPRESS_MS) {
+    if (!shownReasons.has("planning") && Date.now() - problemOpenedAt >= OPENING_PROMPT_DELAY_MS) {
       maybeShow("planning", context);
       return;
     }
 
-    if (!isStubLikeCode(code) && idleFor >= STUCK_DELAY_MS) {
-      maybeShow("stuck", context);
-    }
+    const activelyEditing = editorActivity.focused && idleFor < ACTIVE_EDIT_SUPPRESS_MS;
+    if (activelyEditing) return;
+
+    if (idleFor >= STUCK_DELAY_MS) maybeShow("stuck", context);
   }
 
   function maybeShow(reason, context, eventId = "") {
@@ -172,7 +169,7 @@
     activeContext = context;
     currentLevel = 1;
     interventions += 1;
-    lastNudgeAt = Date.now();
+    if (reason !== "planning") lastNudgeAt = Date.now();
     shownReasons.add(reasonKey);
     renderPrompt(reason);
   }
@@ -183,8 +180,10 @@
         title: t("planningTitle"),
         primaryAction: "expand_plan",
         primaryLabel: t("writeApproach"),
-        secondaryAction: "dismiss",
-        secondaryLabel: t("notNow")
+        secondaryAction: "hint",
+        secondaryLabel: t("needHint"),
+        tertiaryAction: "dismiss",
+        tertiaryLabel: t("notNow")
       });
       return;
     }
@@ -354,6 +353,7 @@
 
   function bestAnchorLine() {
     const lineCount = Math.max(1, Number(editorActivity.lineCount) || 1);
+    if (activeReason === "planning") return Number.MAX_SAFE_INTEGER;
     const cursor = Math.max(1, Number(editorActivity.cursorLine) || lineCount);
     return Math.min(lineCount, cursor);
   }
@@ -421,14 +421,6 @@
     return `${value.length}:${hash >>> 0}`;
   }
 
-  function isStubLikeCode(code) {
-    const trimmed = String(code || "").trim();
-    if (!trimmed) return true;
-    const meaningfulLines = trimmed.split("\n").map((line) => line.trim()).filter((line) => line && !/^\/\/|^#/.test(line));
-    if (trimmed.length <= 80 && meaningfulLines.length <= 4) return true;
-    return /pass\s*$|return\s*\[\]\s*$|return\s+0\s*$|return\s+None\s*$/m.test(trimmed) && trimmed.length <= 180;
-  }
-
   function visibleAiText(raw) {
     return String(raw || "").split("---metadata---")[0].replace(/^(HINT:|COACH:)\s*/i, "").trim();
   }
@@ -463,7 +455,7 @@
 
   const STRINGS = {
     en: {
-      planningTitle: "What's your approach?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", checkApproach: "Check approach", notNow: "Not now",
+      planningTitle: "How do you want to start?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", needHint: "Need a hint", checkApproach: "Check approach", notNow: "Not now",
       failedTitle: "That run failed.", failedCopy: "Want one debugging question, not the answer?", debugThis: "Debug", dismiss: "Dismiss",
       closeTitle: "Samples pass.", closeCopy: "Check one edge case before submitting?", checkEdges: "Check edge case",
       stuckTitle: "Need a nudge?", stuckCopy: "One next thought, without the solution.", showHint: "Show",
@@ -472,7 +464,7 @@
       guestLeft: "Guest · {remaining} left", connectAccess: "Start guest mode or connect your OpenAI API key.", guestUnavailable: "Guest mode is temporarily unavailable.", hintError: "CodeCoach could not generate a hint.", fullSolutionBlocked: "Full solution hidden. Ask for a smaller hint instead."
     },
     ko: {
-      planningTitle: "접근 방법이 어떻게 되나요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", checkApproach: "접근 확인", notNow: "나중에",
+      planningTitle: "어떻게 시작할까요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", needHint: "힌트 필요", checkApproach: "접근 확인", notNow: "나중에",
       failedTitle: "방금 실행이 실패했습니다.", failedCopy: "정답 말고 디버깅 질문 하나만 볼까요?", debugThis: "디버그", dismiss: "닫기",
       closeTitle: "샘플 테스트는 통과했습니다.", closeCopy: "제출 전에 엣지 케이스 하나 확인할까요?", checkEdges: "엣지 케이스 확인",
       stuckTitle: "작은 힌트가 필요하신가요?", stuckCopy: "정답 없이 다음 생각 하나만 짚어드릴게요.", showHint: "보기",

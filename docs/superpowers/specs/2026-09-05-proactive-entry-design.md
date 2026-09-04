@@ -15,4 +15,4 @@ Show CodeCoach as soon as a supported problem editor is ready, without revealing
 
 ## Scope
 
-Change only inline coaching timing, opening actions, localized copy, and their tests. Keep editor rendering and AI routing unchanged.
+Change inline coaching timing, opening actions, localized copy, and editor-local alignment. Keep AI routing unchanged.

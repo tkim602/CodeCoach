@@ -49,11 +49,10 @@
         flex-wrap: wrap;
         gap: 8px;
         max-width: calc(100% - 24px);
-        padding: 3px 5px;
-        border-radius: 5px;
-        background: rgba(24, 25, 29, .96);
-        color: rgba(238, 239, 243, .94);
-        font: 11px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 0;
+        background: transparent;
+        color: var(--vscode-editorGhostText-foreground, rgba(188, 191, 201, .92));
+        font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         pointer-events: auto;
       }
       .codecoach-inline-controls button {
@@ -84,10 +83,11 @@
       .monaco-editor.vs .codecoach-inline-controls,
       .monaco-editor.hc-light .codecoach-inline-controls,
       .CodeMirror.CodeMirror-light .codecoach-inline-controls {
-        background: rgba(250, 250, 252, .97);
         color: #34363d;
-        border: 1px solid rgba(36, 38, 45, .14);
       }
+      .monaco-editor.vs .codecoach-inline-controls button:first-of-type,
+      .monaco-editor.hc-light .codecoach-inline-controls button:first-of-type,
+      .CodeMirror.CodeMirror-light .codecoach-inline-controls button:first-of-type { color: ${ACCENT}; }
     `;
     (document.head || document.documentElement).appendChild(style);
   }
@@ -342,7 +342,7 @@
     if (!editorRef) return;
     clearPresentation();
     currentToken = payload?.token || "";
-    activeLine = Math.min(readLineCount(), Math.max(1, Number(payload?.lineNumber) || readCursorLine()));
+    activeLine = Math.max(1, Number(payload?.lineNumber) || readCursorLine());
     mountVisiblePresentation(payload?.view || {});
   }
 
@@ -378,7 +378,7 @@
     const container = editorContainer();
     if (!container || !ghostHost) return;
     const rect = container.getBoundingClientRect();
-    const coordinates = editorCoordinates(activeLine);
+    const coordinates = editorCoordinates(Math.min(readLineCount(), activeLine));
     if (!coordinates) return;
 
     const left = Math.max(8, Math.min(coordinates.left, Math.max(8, rect.width - 180)));
@@ -400,8 +400,13 @@
         if (position) return { left: position.left, top: position.top, height: position.height || 18 };
       }
       if (editorType === "codemirror") {
-        const position = editorRef.cursorCoords?.({ line: line - 1, ch: lineEndColumn(line) }, "local");
-        if (position) return { left: position.left, top: position.top, height: Math.max(16, position.bottom - position.top) };
+        const position = editorRef.cursorCoords?.({ line: line - 1, ch: lineEndColumn(line) }, "page");
+        const rect = editorContainer()?.getBoundingClientRect?.();
+        if (position && rect) return {
+          left: position.left - window.scrollX - rect.left,
+          top: position.top - window.scrollY - rect.top,
+          height: Math.max(16, position.bottom - position.top)
+        };
       }
       if (editorType === "ace") {
         const screen = editorRef.renderer?.textToScreenCoordinates?.(line - 1, lineEndColumn(line));
@@ -513,7 +518,10 @@
     }
   });
 
-  const observer = new MutationObserver(discoverEditor);
+  const observer = new MutationObserver(() => {
+    discoverEditor();
+    scheduleSync();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   [150, 500, 1200, 2500, 5000].forEach((delay) => setTimeout(discoverEditor, delay));
   setInterval(() => {
