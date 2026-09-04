@@ -19,6 +19,19 @@ describe("inline coach localization", () => {
     expect(source).toContain('tryFreeCta: "무료로 시작"');
   });
 
+  it("opens with a prompt choice and follows up sooner", () => {
+    expect(source).toContain("const OPENING_PROMPT_DELAY_MS = 1_500;");
+    expect(source).toContain("const STUCK_DELAY_MS = 45_000;");
+    expect(source).toContain("const NUDGE_COOLDOWN_MS = 2 * 60_000;");
+    expect(source).toContain('secondaryAction: "hint"');
+    expect(source).toContain('secondaryLabel: t("needHint")');
+    expect(source).toContain('tertiaryAction: "dismiss"');
+    expect(source).toContain('planningTitle: "How do you want to start?"');
+    expect(source).toContain('planningTitle: "어떻게 시작할까요?"');
+    expect(source).toContain('if (activeReason === "planning") return Number.MAX_SAFE_INTEGER;');
+    expect(source).not.toContain("isStubLikeCode");
+  });
+
   it("refreshes settings through the extension-level storage change event", async () => {
     vi.useFakeTimers();
     const storageListener = vi.fn();
