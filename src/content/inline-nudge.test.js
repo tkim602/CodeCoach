@@ -28,8 +28,12 @@ describe("inline coach localization", () => {
     expect(source).toContain('tertiaryAction: "dismiss"');
     expect(source).toContain('planningTitle: "How do you want to start?"');
     expect(source).toContain('planningTitle: "어떻게 시작할까요?"');
-    expect(source).toContain('if (activeReason === "planning") return Number.MAX_SAFE_INTEGER;');
+    expect(source).toContain("lineNumber: Number.MAX_SAFE_INTEGER");
     expect(source).not.toContain("isStubLikeCode");
+  });
+
+  it("keeps thinking visible until the complete answer arrives", () => {
+    expect(source).toContain('if (message.type === "INLINE_AI_DELTA") return false;');
   });
 
   it("refreshes settings through the extension-level storage change event", async () => {

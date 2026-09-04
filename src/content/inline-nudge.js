@@ -53,10 +53,7 @@
       renderState({ title: t("thinking"), tone: "neutral" });
       return false;
     }
-    if (message.type === "INLINE_AI_DELTA") {
-      renderAnswer(visibleAiText(message.rawText || message.delta || ""), false);
-      return false;
-    }
+    if (message.type === "INLINE_AI_DELTA") return false;
     if (message.type === "INLINE_AI_DONE") {
       const rawText = message.rawText || "";
       const visible = visibleAiText(rawText);
@@ -339,7 +336,7 @@
     window.postMessage({
       source: SOURCE_RENDER,
       token: inlineToken,
-      lineNumber: bestAnchorLine(),
+      lineNumber: Number.MAX_SAFE_INTEGER,
       view
     }, "*");
   }
@@ -349,13 +346,6 @@
     inlineToken = "";
     activeReason = "";
     activeReasonKey = "";
-  }
-
-  function bestAnchorLine() {
-    const lineCount = Math.max(1, Number(editorActivity.lineCount) || 1);
-    if (activeReason === "planning") return Number.MAX_SAFE_INTEGER;
-    const cursor = Math.max(1, Number(editorActivity.cursorLine) || lineCount);
-    return Math.min(lineCount, cursor);
   }
 
   async function refreshSettings() {

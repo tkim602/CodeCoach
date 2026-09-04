@@ -356,7 +356,7 @@
     ghostHost = document.createElement("span");
     ghostHost.className = "codecoach-inline-ghost-overlay";
     ghostHost.dataset.codecoachInlineUi = "1";
-    ghostHost.textContent = `  ${ghostText(view)}`;
+    ghostHost.textContent = ghostText(view);
     container.appendChild(ghostHost);
 
     controlsHost = createControls(view);
@@ -378,11 +378,12 @@
     const container = editorContainer();
     if (!container || !ghostHost) return;
     const rect = container.getBoundingClientRect();
-    const coordinates = editorCoordinates(Math.min(readLineCount(), activeLine));
+    const afterLastLine = activeLine === Number.MAX_SAFE_INTEGER;
+    const coordinates = editorCoordinates(Math.min(readLineCount(), activeLine), afterLastLine);
     if (!coordinates) return;
 
     const left = Math.max(8, Math.min(coordinates.left, Math.max(8, rect.width - 180)));
-    const lineTop = Math.max(2, Math.min(coordinates.top, Math.max(2, rect.height - 24)));
+    const lineTop = Math.max(2, Math.min(coordinates.top + (afterLastLine ? coordinates.height : 0), Math.max(2, rect.height - 24)));
     ghostHost.style.left = `${left}px`;
     ghostHost.style.top = `${lineTop}px`;
 
@@ -393,14 +394,16 @@
     }
   }
 
-  function editorCoordinates(line) {
+  function editorCoordinates(line, atIndent = false) {
     try {
       if (editorType === "monaco") {
-        const position = editorRef.getScrolledVisiblePosition?.({ lineNumber: line, column: lineEndColumn(line) });
+        const column = atIndent ? leadingIndent(editorRef.getModel?.()?.getLineContent?.(line)) + 1 : lineEndColumn(line);
+        const position = editorRef.getScrolledVisiblePosition?.({ lineNumber: line, column });
         if (position) return { left: position.left, top: position.top, height: position.height || 18 };
       }
       if (editorType === "codemirror") {
-        const position = editorRef.cursorCoords?.({ line: line - 1, ch: lineEndColumn(line) }, "page");
+        const ch = atIndent ? leadingIndent(editorRef.getLine?.(line - 1)) : lineEndColumn(line);
+        const position = editorRef.cursorCoords?.({ line: line - 1, ch }, "page");
         const rect = editorContainer()?.getBoundingClientRect?.();
         if (position && rect) return {
           left: position.left - window.scrollX - rect.left,
@@ -409,7 +412,8 @@
         };
       }
       if (editorType === "ace") {
-        const screen = editorRef.renderer?.textToScreenCoordinates?.(line - 1, lineEndColumn(line));
+        const column = atIndent ? leadingIndent(editorRef.session?.getLine?.(line - 1)) : lineEndColumn(line);
+        const screen = editorRef.renderer?.textToScreenCoordinates?.(line - 1, column);
         const rect = editorContainer()?.getBoundingClientRect?.();
         if (screen && rect) {
           return {
@@ -419,7 +423,7 @@
           };
         }
       }
-      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return domLineCoordinates(line);
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return domLineCoordinates(line, atIndent);
     } catch {}
     return { left: 12, top: 24, height: 18 };
   }
@@ -470,16 +474,17 @@
     return nearestIndex + 1;
   }
 
-  function domLineCoordinates(lineNumber) {
+  function domLineCoordinates(lineNumber, atIndent = false) {
     const containerRect = editorRef?.getBoundingClientRect?.();
     const lines = domLineElements();
     const line = lines[Math.max(0, Math.min(lines.length - 1, lineNumber - 1))];
     if (!containerRect || !line) return null;
     const lineRect = line.getBoundingClientRect();
-    let textRight = lineRect.right;
+    let textRight = atIndent ? lineRect.left : lineRect.right;
     try {
       const range = document.createRange();
       range.selectNodeContents(line);
+      if (atIndent) setRangeEnd(range, line, leadingIndent(line.textContent));
       const textRect = range.getBoundingClientRect();
       if (textRect.width > 0) textRight = textRect.right;
     } catch {}
@@ -488,6 +493,24 @@
       top: Math.max(0, lineRect.top - containerRect.top),
       height: lineRect.height || 18
     };
+  }
+
+  function leadingIndent(text) {
+    return String(text || "").match(/^\s*/)?.[0].length || 0;
+  }
+
+  function setRangeEnd(range, root, offset) {
+    const walker = document.createTreeWalker(root, 4);
+    let remaining = offset;
+    let node = walker.nextNode();
+    while (node) {
+      if (remaining <= node.textContent.length) {
+        range.setEnd(node, remaining);
+        return;
+      }
+      remaining -= node.textContent.length;
+      node = walker.nextNode();
+    }
   }
 
   function clearPresentation() {
