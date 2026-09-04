@@ -60,6 +60,21 @@ describe("inline nudge page bridge", () => {
     }), "*");
   });
 
+  it("mounts on live-style Monaco DOM when the Monaco global is private", () => {
+    const container = createContainer("monaco-editor");
+    const textarea = document.createElement("textarea");
+    textarea.value = "line one\nline two\nline three\nline four";
+    container.append(textarea, createRenderedLines("view-lines", "view-line", 4));
+
+    runBridge();
+    dispatchWindowMessage(renderMessage);
+
+    const ghost = container.querySelector(".codecoach-inline-ghost-overlay");
+    expect(ghost).not.toBeNull();
+    expect(ghost.textContent).toContain("dp[i - coin]");
+    expect(ghost.style.top).toBe("40px");
+  });
+
   it("mounts the same visible overlay for CodeMirror", () => {
     const wrapper = createContainer("CodeMirror");
     wrapper.CodeMirror = {
@@ -85,6 +100,19 @@ describe("inline nudge page bridge", () => {
     dispatchWindowMessage({ source: "CODING_HINT_COACH_INLINE_HIDE" });
     expect(wrapper.querySelector(".codecoach-inline-ghost-overlay")).toBeNull();
     expect(wrapper.querySelector(".codecoach-inline-controls")).toBeNull();
+  });
+
+  it("mounts on live-style CodeMirror DOM when its instance is private", () => {
+    const wrapper = createContainer("CodeMirror");
+    wrapper.append(createRenderedLines("CodeMirror-code", "CodeMirror-line", 4));
+
+    runBridge();
+    dispatchWindowMessage(renderMessage);
+
+    const ghost = wrapper.querySelector(".codecoach-inline-ghost-overlay");
+    expect(ghost).not.toBeNull();
+    expect(ghost.style.top).toBe("40px");
+    expect(wrapper.querySelector(".codecoach-inline-controls")).not.toBeNull();
   });
 
   it("anchors an Ace overlay inside the editor and removes it when hidden", () => {
@@ -182,6 +210,26 @@ function createMonacoEditor(container, model) {
     onDidScrollChange: vi.fn(() => ({ dispose: vi.fn() })),
     onDidLayoutChange: vi.fn(() => ({ dispose: vi.fn() }))
   };
+}
+
+function createRenderedLines(wrapperClass, lineClass, count) {
+  const wrapper = document.createElement("div");
+  wrapper.className = wrapperClass;
+  for (let index = 0; index < count; index += 1) {
+    const line = document.createElement("div");
+    line.className = lineClass;
+    line.textContent = `line ${index + 1}`;
+    line.getBoundingClientRect = () => ({
+      left: 50,
+      top: index * 20,
+      width: 120,
+      height: 20,
+      right: 170,
+      bottom: (index + 1) * 20
+    });
+    wrapper.appendChild(line);
+  }
+  return wrapper;
 }
 
 function runBridge() {

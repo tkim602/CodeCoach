@@ -144,6 +144,17 @@
       subscribeEvent(nextEditor, "blur", () => { focused = false; postActivity(); });
       subscribeEvent(nextEditor.renderer, "afterRender", scheduleSync);
       subscribeEvent(nextEditor.renderer, "scroll", scheduleSync);
+    } else if (type === "monaco-dom" || type === "codemirror-dom") {
+      const onActivity = () => {
+        cursorLine = readCursorLine();
+        focused = editorHasFocus();
+        postActivity();
+        scheduleSync();
+      };
+      for (const eventName of ["input", "keyup", "click", "focusin", "focusout", "scroll"]) {
+        nextEditor.addEventListener(eventName, onActivity);
+        subscriptions.push(() => nextEditor.removeEventListener(eventName, onActivity));
+      }
     }
 
     const container = editorContainer();
@@ -169,10 +180,14 @@
       if (usable) return registerEditor(usable, "monaco");
     } catch {}
 
+    const monacoNode = visibleEditorNode(".monaco-editor");
+    if (monacoNode) return registerEditor(monacoNode, "monaco-dom");
+
     try {
-      const cmNode = document.querySelector(".CodeMirror");
+      const cmNode = visibleEditorNode(".CodeMirror");
       const cm = cmNode?.CodeMirror;
       if (cm?.getValue) return registerEditor(cm, "codemirror");
+      if (cmNode) return registerEditor(cmNode, "codemirror-dom");
     } catch {}
 
     try {
@@ -189,6 +204,7 @@
       if (editorType === "monaco") return Boolean(editorRef?.hasTextFocus?.());
       if (editorType === "codemirror") return Boolean(editorRef?.hasFocus?.());
       if (editorType === "ace") return Boolean(editorRef?.isFocused?.());
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return editorRef?.contains?.(document.activeElement) || false;
     } catch {}
     return false;
   }
@@ -198,6 +214,7 @@
       if (editorType === "monaco") return Math.max(1, Number(editorRef?.getPosition?.()?.lineNumber) || 1);
       if (editorType === "codemirror") return Math.max(1, (Number(editorRef?.getCursor?.()?.line) || 0) + 1);
       if (editorType === "ace") return Math.max(1, (Number(editorRef?.getCursorPosition?.()?.row) || 0) + 1);
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return domCursorLine();
     } catch {}
     return 1;
   }
@@ -207,6 +224,11 @@
       if (editorType === "monaco") return Number(editorRef?.getModel?.()?.getLineCount?.()) || 1;
       if (editorType === "codemirror") return Number(editorRef?.lineCount?.()) || 1;
       if (editorType === "ace") return Number(editorRef?.session?.getLength?.()) || 1;
+      if (editorType === "monaco-dom") {
+        const value = editorRef?.querySelector?.("textarea")?.value;
+        if (value) return String(value).split("\n").length;
+      }
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return domLineElements().length || 1;
     } catch {}
     return 1;
   }
@@ -392,6 +414,7 @@
           };
         }
       }
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return domLineCoordinates(line);
     } catch {}
     return { left: 12, top: 24, height: 18 };
   }
@@ -401,8 +424,65 @@
       if (editorType === "monaco") return editorRef?.getContainerDomNode?.();
       if (editorType === "codemirror") return editorRef?.getWrapperElement?.();
       if (editorType === "ace") return editorRef?.container;
+      if (editorType === "monaco-dom" || editorType === "codemirror-dom") return editorRef;
     } catch {}
     return document.querySelector(".monaco-editor,.CodeMirror,.ace_editor");
+  }
+
+  function visibleEditorNode(selector) {
+    if (typeof document === "undefined") return null;
+    const nodes = Array.from(document.querySelectorAll(selector));
+    return nodes.find((node) => {
+      const rect = node.getBoundingClientRect?.();
+      return rect && rect.width > 0 && rect.height > 0;
+    }) || null;
+  }
+
+  function domLineElements() {
+    if (!editorRef?.querySelectorAll) return [];
+    const selector = editorType === "monaco-dom"
+      ? ".view-lines .view-line"
+      : ".CodeMirror-code .CodeMirror-line, .CodeMirror-code pre";
+    return Array.from(editorRef.querySelectorAll(selector));
+  }
+
+  function domCursorLine() {
+    const lines = domLineElements();
+    const cursorSelector = editorType === "monaco-dom" ? ".cursor" : ".CodeMirror-cursor";
+    const cursor = editorRef?.querySelector?.(cursorSelector);
+    const cursorRect = cursor?.getBoundingClientRect?.();
+    if (!lines.length || !cursorRect) return 1;
+    let nearestIndex = 0;
+    let nearestDistance = Infinity;
+    lines.forEach((line, index) => {
+      const rect = line.getBoundingClientRect();
+      const distance = Math.abs(rect.top - cursorRect.top);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    return nearestIndex + 1;
+  }
+
+  function domLineCoordinates(lineNumber) {
+    const containerRect = editorRef?.getBoundingClientRect?.();
+    const lines = domLineElements();
+    const line = lines[Math.max(0, Math.min(lines.length - 1, lineNumber - 1))];
+    if (!containerRect || !line) return null;
+    const lineRect = line.getBoundingClientRect();
+    let textRight = lineRect.right;
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(line);
+      const textRect = range.getBoundingClientRect();
+      if (textRect.width > 0) textRight = textRect.right;
+    } catch {}
+    return {
+      left: Math.max(0, textRight - containerRect.left),
+      top: Math.max(0, lineRect.top - containerRect.top),
+      height: lineRect.height || 18
+    };
   }
 
   function clearPresentation() {
