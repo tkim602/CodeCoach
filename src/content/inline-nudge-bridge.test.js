@@ -35,35 +35,21 @@ describe("inline nudge page bridge", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses Monaco injected text without adding a view zone", () => {
-    const container = document.createElement("div");
-    container.className = "monaco-editor";
-    document.body.appendChild(container);
-    const model = {
-      getLineCount: () => 8,
-      getLineMaxColumn: () => 22,
-      deltaDecorations: vi.fn(() => ["decoration-1"])
-    };
+  it("mounts a visible Monaco overlay and interactive controls", () => {
+    const container = createContainer("monaco-editor");
+    const model = { getLineCount: () => 8, getLineMaxColumn: () => 22 };
     const editor = createMonacoEditor(container, model);
-    window.monaco = {
-      Range: class Range { constructor(...values) { this.values = values; } },
-      editor: { getEditors: () => [editor] }
-    };
+    window.monaco = { editor: { getEditors: () => [editor] } };
     const postMessage = vi.spyOn(window, "postMessage");
 
     runBridge();
     dispatchWindowMessage(renderMessage);
 
-    expect(model.deltaDecorations).toHaveBeenCalledWith([], [expect.objectContaining({
-      options: expect.objectContaining({
-        after: expect.objectContaining({
-          content: expect.stringContaining("dp[i - coin]"),
-          inlineClassName: "codecoach-inline-ghost"
-        })
-      })
-    })]);
-    expect(editor.changeViewZones).not.toHaveBeenCalled();
+    const ghost = container.querySelector(".codecoach-inline-ghost-overlay");
     const controls = container.querySelector(".codecoach-inline-controls");
+    expect(ghost).not.toBeNull();
+    expect(ghost.textContent).toContain("dp[i - coin]");
+    expect(ghost.style.left).toBe("120px");
     expect(controls).not.toBeNull();
 
     controls.querySelector("button").click();
@@ -74,44 +60,8 @@ describe("inline nudge page bridge", () => {
     }), "*");
   });
 
-  it("uses a CodeMirror bookmark and clears it when hidden", () => {
-    const wrapper = document.createElement("div");
-    wrapper.className = "CodeMirror";
-    document.body.appendChild(wrapper);
-    const marker = { clear: vi.fn() };
-    const cm = {
-      getValue: () => "code",
-      getCursor: () => ({ line: 2, ch: 4 }),
-      getLine: () => "return value",
-      lineCount: () => 6,
-      hasFocus: () => true,
-      getWrapperElement: () => wrapper,
-      setBookmark: vi.fn(() => marker),
-      on: vi.fn(),
-      off: vi.fn()
-    };
-    wrapper.CodeMirror = cm;
-
-    runBridge();
-    dispatchWindowMessage(renderMessage);
-
-    expect(cm.setBookmark).toHaveBeenCalledWith({ line: 2, ch: 12 }, expect.objectContaining({
-      widget: expect.any(HTMLElement),
-      insertLeft: false
-    }));
-    expect(wrapper.querySelector(".codecoach-inline-controls")).not.toBeNull();
-
-    const clearsBeforeHide = marker.clear.mock.calls.length;
-    dispatchWindowMessage({ source: "CODING_HINT_COACH_INLINE_HIDE" });
-    expect(marker.clear.mock.calls.length).toBeGreaterThan(clearsBeforeHide);
-    expect(wrapper.querySelector(".codecoach-inline-controls")).toBeNull();
-  });
-
-  it("falls back to a coordinate overlay when CodeMirror has no bookmark API", () => {
-    const wrapper = document.createElement("div");
-    wrapper.className = "CodeMirror";
-    wrapper.getBoundingClientRect = () => ({ left: 0, top: 0, right: 500, bottom: 300, width: 500, height: 300 });
-    document.body.appendChild(wrapper);
+  it("mounts the same visible overlay for CodeMirror", () => {
+    const wrapper = createContainer("CodeMirror");
     wrapper.CodeMirror = {
       getValue: () => "code",
       getCursor: () => ({ line: 2, ch: 4 }),
@@ -127,24 +77,34 @@ describe("inline nudge page bridge", () => {
     runBridge();
     dispatchWindowMessage(renderMessage);
 
-    expect(wrapper.querySelector(".codecoach-inline-ghost-overlay")).not.toBeNull();
+    const ghost = wrapper.querySelector(".codecoach-inline-ghost-overlay");
+    expect(ghost).not.toBeNull();
+    expect(ghost.style.left).toBe("90px");
+    expect(wrapper.querySelector(".codecoach-inline-controls")).not.toBeNull();
+
+    dispatchWindowMessage({ source: "CODING_HINT_COACH_INLINE_HIDE" });
+    expect(wrapper.querySelector(".codecoach-inline-ghost-overlay")).toBeNull();
+    expect(wrapper.querySelector(".codecoach-inline-controls")).toBeNull();
   });
 
   it("anchors an Ace overlay inside the editor and removes it when hidden", () => {
-    const container = document.createElement("div");
-    container.className = "ace_editor";
-    container.getBoundingClientRect = () => ({ left: 40, top: 60, right: 640, bottom: 460, width: 600, height: 400 });
-    document.body.appendChild(container);
+    const container = createContainer("ace_editor", { left: 40, top: 60, width: 600, height: 400 });
     const ace = {
       container,
       getCursorPosition: () => ({ row: 2, column: 4 }),
       isFocused: () => true,
       renderer: {
         textToScreenCoordinates: () => ({ pageX: 160, pageY: 210 }),
+        lineHeight: 18,
         on: vi.fn(),
         off: vi.fn()
       },
-      session: { getLength: () => 8, on: vi.fn(), off: vi.fn() },
+      session: {
+        getLength: () => 8,
+        getLine: () => "return value",
+        on: vi.fn(),
+        off: vi.fn()
+      },
       selection: { on: vi.fn(), off: vi.fn() },
       on: vi.fn(),
       off: vi.fn()
@@ -163,20 +123,11 @@ describe("inline nudge page bridge", () => {
   });
 
   it("keeps approach input keyboard events out of the host editor", () => {
-    const container = document.createElement("div");
-    container.className = "monaco-editor";
-    document.body.appendChild(container);
+    const container = createContainer("monaco-editor");
     const editorKeydown = vi.fn();
     container.addEventListener("keydown", editorKeydown);
-    const model = {
-      getLineCount: () => 8,
-      getLineMaxColumn: () => 22,
-      deltaDecorations: vi.fn(() => ["decoration-1"])
-    };
-    window.monaco = {
-      Range: class Range { constructor(...values) { this.values = values; } },
-      editor: { getEditors: () => [createMonacoEditor(container, model)] }
-    };
+    const model = { getLineCount: () => 8, getLineMaxColumn: () => 22 };
+    window.monaco = { editor: { getEditors: () => [createMonacoEditor(container, model)] } };
     const postMessage = vi.spyOn(window, "postMessage");
 
     runBridge();
@@ -202,6 +153,21 @@ describe("inline nudge page bridge", () => {
   });
 });
 
+function createContainer(className, rect = { left: 0, top: 0, width: 500, height: 300 }) {
+  const container = document.createElement("div");
+  container.className = className;
+  container.getBoundingClientRect = () => ({
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+    right: rect.left + rect.width,
+    bottom: rect.top + rect.height
+  });
+  document.body.appendChild(container);
+  return container;
+}
+
 function createMonacoEditor(container, model) {
   return {
     getModel: () => model,
@@ -209,7 +175,6 @@ function createMonacoEditor(container, model) {
     getContainerDomNode: () => container,
     getScrolledVisiblePosition: () => ({ left: 120, top: 42, height: 18 }),
     hasTextFocus: () => true,
-    changeViewZones: vi.fn(),
     onDidChangeModelContent: vi.fn(() => ({ dispose: vi.fn() })),
     onDidChangeCursorPosition: vi.fn(() => ({ dispose: vi.fn() })),
     onDidFocusEditorText: vi.fn(() => ({ dispose: vi.fn() })),
