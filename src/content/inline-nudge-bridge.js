@@ -1,5 +1,5 @@
 // Page-world bridge for editor-native CodeCoach nudges.
-// Reads only public editor APIs. It never changes the user's code model.
+// Reads public editor APIs and never changes the user's code model.
 (function () {
   if (window.__codeCoachInlineNudgeBridge) return;
   window.__codeCoachInlineNudgeBridge = true;
@@ -8,6 +8,7 @@
   const SOURCE_RENDER = "CODING_HINT_COACH_INLINE_RENDER";
   const SOURCE_HIDE = "CODING_HINT_COACH_INLINE_HIDE";
   const SOURCE_ACTION = "CODING_HINT_COACH_INLINE_ACTION";
+  const STYLE_ID = "codecoach-inline-ghost-style";
   const ACCENT = "#6128ff";
 
   let editorRef = null;
@@ -16,9 +17,86 @@
   let lastChangeAt = 0;
   let focused = false;
   let cursorLine = 1;
-  let nativeHandle = null;
   let currentToken = "";
-  let fallbackHost = null;
+  let activeLine = 1;
+  let presentation = null;
+  let controlsHost = null;
+  let resizeObserver = null;
+  let syncFrame = 0;
+
+  installStyles();
+
+  function installStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      .monaco-editor .codecoach-inline-ghost,
+      .CodeMirror .codecoach-inline-ghost,
+      .ace_editor .codecoach-inline-ghost,
+      .codecoach-inline-ghost-overlay {
+        color: var(--vscode-editorGhostText-foreground, rgba(143, 148, 160, .88));
+        font-style: italic;
+        opacity: .92;
+        white-space: pre-wrap;
+      }
+      .codecoach-inline-ghost-overlay {
+        position: absolute;
+        z-index: 7;
+        max-width: calc(100% - 24px);
+        pointer-events: none;
+        font: italic 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .codecoach-inline-controls {
+        position: absolute;
+        z-index: 8;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-width: calc(100% - 24px);
+        padding: 3px 5px;
+        border-radius: 5px;
+        background: rgba(24, 25, 29, .94);
+        color: rgba(238, 239, 243, .92);
+        font: 11px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        pointer-events: auto;
+      }
+      .codecoach-inline-controls button {
+        appearance: none;
+        border: 0;
+        padding: 2px 1px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+      }
+      .codecoach-inline-controls button:first-of-type { color: #c8baff; }
+      .codecoach-inline-controls button:hover { text-decoration: underline; text-underline-offset: 2px; }
+      .codecoach-inline-controls button:focus-visible,
+      .codecoach-inline-controls input:focus-visible { outline: 2px solid ${ACCENT}; outline-offset: 2px; }
+      .codecoach-inline-controls input {
+        width: min(300px, calc(100% - 90px));
+        min-width: 150px;
+        border: 1px solid rgba(224, 226, 234, .34);
+        border-radius: 4px;
+        padding: 4px 6px;
+        background: rgba(255, 255, 255, .08);
+        color: inherit;
+        font: inherit;
+      }
+      .codecoach-inline-trial { opacity: .62; font-size: 10px; }
+      .monaco-editor.vs .codecoach-inline-controls,
+      .monaco-editor.hc-light .codecoach-inline-controls,
+      .CodeMirror.CodeMirror-light .codecoach-inline-controls {
+        background: rgba(250, 250, 252, .96);
+        color: #34363d;
+        border: 1px solid rgba(36, 38, 45, .14);
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   function disposeSubscriptions() {
     subscriptions.forEach((dispose) => {
@@ -28,6 +106,8 @@
       } catch {}
     });
     subscriptions = [];
+    resizeObserver?.disconnect?.();
+    resizeObserver = null;
   }
 
   function registerEditor(nextEditor, type) {
@@ -48,34 +128,35 @@
       }));
       subscriptions.push(nextEditor.onDidFocusEditorText?.(() => { focused = true; postActivity(); }));
       subscriptions.push(nextEditor.onDidBlurEditorText?.(() => { focused = false; postActivity(); }));
+      subscriptions.push(nextEditor.onDidScrollChange?.(scheduleSync));
+      subscriptions.push(nextEditor.onDidLayoutChange?.(scheduleSync));
     } else if (type === "codemirror") {
-      const onChange = () => markChanged();
-      const onCursor = () => { cursorLine = readCursorLine(); postActivity(); };
-      const onFocus = () => { focused = true; postActivity(); };
-      const onBlur = () => { focused = false; postActivity(); };
-      nextEditor.on?.("change", onChange);
-      nextEditor.on?.("cursorActivity", onCursor);
-      nextEditor.on?.("focus", onFocus);
-      nextEditor.on?.("blur", onBlur);
-      subscriptions.push(() => nextEditor.off?.("change", onChange));
-      subscriptions.push(() => nextEditor.off?.("cursorActivity", onCursor));
-      subscriptions.push(() => nextEditor.off?.("focus", onFocus));
-      subscriptions.push(() => nextEditor.off?.("blur", onBlur));
+      subscribeEvent(nextEditor, "change", markChanged);
+      subscribeEvent(nextEditor, "cursorActivity", () => { cursorLine = readCursorLine(); postActivity(); });
+      subscribeEvent(nextEditor, "focus", () => { focused = true; postActivity(); });
+      subscribeEvent(nextEditor, "blur", () => { focused = false; postActivity(); });
+      subscribeEvent(nextEditor, "scroll", scheduleSync);
+      subscribeEvent(nextEditor, "refresh", scheduleSync);
     } else if (type === "ace") {
-      const onChange = () => markChanged();
-      const onCursor = () => { cursorLine = readCursorLine(); postActivity(); };
-      const onFocus = () => { focused = true; postActivity(); };
-      const onBlur = () => { focused = false; postActivity(); };
-      nextEditor.session?.on?.("change", onChange);
-      nextEditor.selection?.on?.("changeCursor", onCursor);
-      nextEditor.on?.("focus", onFocus);
-      nextEditor.on?.("blur", onBlur);
-      subscriptions.push(() => nextEditor.session?.off?.("change", onChange));
-      subscriptions.push(() => nextEditor.selection?.off?.("changeCursor", onCursor));
-      subscriptions.push(() => nextEditor.off?.("focus", onFocus));
-      subscriptions.push(() => nextEditor.off?.("blur", onBlur));
+      subscribeEvent(nextEditor.session, "change", markChanged);
+      subscribeEvent(nextEditor.selection, "changeCursor", () => { cursorLine = readCursorLine(); postActivity(); });
+      subscribeEvent(nextEditor, "focus", () => { focused = true; postActivity(); });
+      subscribeEvent(nextEditor, "blur", () => { focused = false; postActivity(); });
+      subscribeEvent(nextEditor.renderer, "afterRender", scheduleSync);
+      subscribeEvent(nextEditor.renderer, "scroll", scheduleSync);
+    }
+
+    const container = editorContainer();
+    if (container && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(scheduleSync);
+      resizeObserver.observe(container);
     }
     postActivity();
+  }
+
+  function subscribeEvent(target, eventName, handler) {
+    target?.on?.(eventName, handler);
+    subscriptions.push(() => target?.off?.(eventName, handler));
   }
 
   function markChanged() {
@@ -83,6 +164,7 @@
     cursorLine = readCursorLine();
     focused = editorHasFocus();
     postActivity();
+    scheduleSync();
   }
 
   function discoverEditor() {
@@ -134,6 +216,15 @@
     return 1;
   }
 
+  function lineEndColumn(line) {
+    try {
+      if (editorType === "monaco") return Number(editorRef?.getModel?.()?.getLineMaxColumn?.(line)) || 1;
+      if (editorType === "codemirror") return String(editorRef?.getLine?.(line - 1) || "").length;
+      if (editorType === "ace") return String(editorRef?.session?.getLine?.(line - 1) || "").length;
+    } catch {}
+    return 1;
+  }
+
   function postActivity() {
     if (!editorRef) return;
     focused = editorHasFocus();
@@ -148,163 +239,233 @@
     }, "*");
   }
 
-  function createNode(view) {
+  function isolateInteractiveEvents(root) {
+    const stop = (event) => event.stopPropagation();
+    ["pointerdown", "pointerup", "mousedown", "mouseup", "click", "dblclick", "keydown", "keyup", "keypress", "input", "change", "paste", "compositionstart", "compositionupdate", "compositionend"].forEach((type) => {
+      root.addEventListener(type, stop);
+    });
+  }
+
+  function ghostText(view) {
+    return [view?.tone === "success" ? "OK" : "CodeCoach", view?.title, view?.body]
+      .filter(Boolean)
+      .join(": ")
+      .replace(/[ \t]+/g, " ")
+      .trim();
+  }
+
+  function createGhostNode(view, overlay = false) {
+    const ghost = document.createElement("span");
+    ghost.className = overlay ? "codecoach-inline-ghost-overlay" : "codecoach-inline-ghost";
+    ghost.textContent = `  ${ghostText(view)}`;
+    ghost.dataset.codecoachInlineUi = "1";
+    return ghost;
+  }
+
+  function createControls(view) {
+    const actions = [
+      [view?.primaryAction, view?.primaryLabel],
+      [view?.secondaryAction, view?.secondaryLabel],
+      [view?.tertiaryAction, view?.tertiaryLabel]
+    ].filter(([action, label]) => action && label);
+    if (!actions.length && !view?.showInput && !view?.trialText) return null;
+
     const root = document.createElement("div");
-    root.className = "codecoach-inline-native";
-    root.style.cssText = [
-      "box-sizing:border-box",
-      "width:min(620px,calc(100% - 24px))",
-      "margin:4px 12px 5px 8px",
-      "font:12px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
-      "color:inherit"
-    ].join(";");
+    root.className = "codecoach-inline-controls";
+    root.dataset.codecoachInlineUi = "1";
+    isolateInteractiveEvents(root);
 
-    const shell = document.createElement("div");
-    shell.style.cssText = [
-      "display:flex",
-      "align-items:flex-start",
-      "gap:8px",
-      "min-height:28px",
-      "padding:5px 8px",
-      "border-left:2px solid " + ACCENT,
-      "background:color-mix(in srgb," + ACCENT + " 7%,transparent)",
-      "border-radius:0 7px 7px 0"
-    ].join(";");
-
-    const mark = document.createElement("span");
-    mark.textContent = view?.tone === "success" ? "✓" : "✦";
-    mark.style.cssText = `color:${ACCENT};font-weight:800;line-height:20px;flex:0 0 auto`;
-
-    const content = document.createElement("div");
-    content.style.cssText = "min-width:0;flex:1";
-    const title = document.createElement("div");
-    title.textContent = view?.title || "CodeCoach";
-    title.style.cssText = "font-weight:650;line-height:20px;white-space:pre-wrap";
-    content.appendChild(title);
-
-    if (view?.body) {
-      const body = document.createElement("div");
-      body.textContent = view.body;
-      body.style.cssText = "opacity:.78;margin-top:1px;white-space:pre-wrap;max-width:560px";
-      content.appendChild(body);
-    }
-
+    let input = null;
     if (view?.showInput) {
-      const input = document.createElement("textarea");
-      input.rows = 2;
+      input = document.createElement("input");
+      input.type = "text";
       input.placeholder = view.inputPlaceholder || "";
       input.dataset.inlineInput = "1";
-      input.style.cssText = `display:block;width:min(520px,100%);margin-top:6px;resize:none;border:1px solid color-mix(in srgb,${ACCENT} 28%,#888);border-radius:6px;padding:5px 7px;background:transparent;color:inherit;font:inherit;outline:none`;
-      content.appendChild(input);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey && view?.primaryAction) {
+          event.preventDefault();
+          emitAction(view.primaryAction, input.value);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          emitAction(view?.secondaryAction || "dismiss", "");
+        }
+      });
+      root.appendChild(input);
     }
 
-    const actions = document.createElement("div");
-    actions.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px";
-    [
-      [view?.primaryAction, view?.primaryLabel, true],
-      [view?.secondaryAction, view?.secondaryLabel, false],
-      [view?.tertiaryAction, view?.tertiaryLabel, false]
-    ].forEach(([action, label, primary]) => {
-      if (!action || !label) return;
+    actions.forEach(([action, label]) => {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = label;
-      button.style.cssText = primary
-        ? `border:0;background:transparent;color:${ACCENT};padding:1px 0;font:600 12px/1.4 inherit;cursor:pointer`
-        : "border:0;background:transparent;color:inherit;opacity:.62;padding:1px 0;font:500 12px/1.4 inherit;cursor:pointer";
+      button.dataset.action = action;
+      button.addEventListener("mousedown", (event) => event.preventDefault());
       button.addEventListener("click", (event) => {
         event.preventDefault();
-        event.stopPropagation();
-        const input = root.querySelector("[data-inline-input='1']");
-        window.postMessage({ source: SOURCE_ACTION, token: currentToken, action, value: input?.value?.trim?.() || "" }, "*");
+        emitAction(action, input?.value || "");
       });
-      actions.appendChild(button);
+      root.appendChild(button);
     });
-    if (actions.childElementCount) content.appendChild(actions);
 
     if (view?.trialText) {
       const trial = document.createElement("span");
+      trial.className = "codecoach-inline-trial";
       trial.textContent = view.trialText;
-      trial.style.cssText = "display:block;opacity:.55;font-size:10px;margin-top:3px";
-      content.appendChild(trial);
+      root.appendChild(trial);
     }
 
-    shell.append(mark, content);
-    root.appendChild(shell);
+    if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
     return root;
   }
 
-  function heightForView(view) {
-    if (view?.showInput) return 92;
-    if (view?.body && String(view.body).length > 180) return 78;
-    if (view?.body) return 62;
-    return 38;
+  function emitAction(action, value) {
+    window.postMessage({
+      source: SOURCE_ACTION,
+      token: currentToken,
+      action,
+      value: String(value || "").trim()
+    }, "*");
   }
 
   function showInline(payload) {
     discoverEditor();
     if (!editorRef) return;
-    hideInline();
+
+    clearPresentation();
     currentToken = payload?.token || "";
     const view = payload?.view || {};
-    const line = Math.min(readLineCount(), Math.max(1, Number(payload?.lineNumber) || readCursorLine()));
-    const node = createNode(view);
+    activeLine = Math.min(readLineCount(), Math.max(1, Number(payload?.lineNumber) || readCursorLine()));
 
-    if (editorType === "monaco") {
-      try {
-        let zoneId = null;
-        editorRef.changeViewZones((accessor) => {
-          zoneId = accessor.addZone({ afterLineNumber: line, heightInPx: heightForView(view), domNode: node, suppressMouseDown: false });
-        });
-        nativeHandle = { type: "monaco", editor: editorRef, zoneId };
-        return;
-      } catch {}
-    }
-
-    if (editorType === "codemirror") {
-      try {
-        const widget = editorRef.addLineWidget(line - 1, node, { noHScroll: true, handleMouseEvents: true });
-        nativeHandle = { type: "codemirror", widget };
-        return;
-      } catch {}
-    }
-
-    if (editorType === "ace") {
-      try {
-        const LineWidgets = window.ace?.require?.("ace/line_widgets")?.LineWidgets;
-        if (LineWidgets) {
-          if (!editorRef.session.widgetManager) {
-            editorRef.session.widgetManager = new LineWidgets(editorRef.session);
-            editorRef.session.widgetManager.attach(editorRef);
-          }
-          const widget = { row: line - 1, fixedWidth: true, coverGutter: false, el: node, pixelHeight: heightForView(view) };
-          editorRef.session.widgetManager.addLineWidget(widget);
-          nativeHandle = { type: "ace", editor: editorRef, widget };
-          return;
-        }
-      } catch {}
-    }
-
-    showAnchoredFallback(node, line);
+    if (editorType === "monaco" && showMonaco(view, activeLine)) return;
+    if (editorType === "codemirror" && showCodeMirror(view, activeLine)) return;
+    showCoordinateOverlay(view, activeLine);
   }
 
-  function showAnchoredFallback(node, line) {
-    const editorNode = editorContainer();
-    if (!editorNode) return;
-    fallbackHost = node;
-    node.style.position = "fixed";
-    node.style.zIndex = "2147483646";
-    node.style.width = "min(560px,calc(100vw - 32px))";
-    const rect = editorNode.getBoundingClientRect();
-    let top = rect.top + 32;
+  function showMonaco(view, line) {
     try {
-      if (editorType === "monaco") top = rect.top + (editorRef.getTopForLineNumber(line, true) - editorRef.getScrollTop()) + 22;
-      if (editorType === "codemirror") top = editorRef.charCoords({ line: line - 1, ch: 0 }, "window").bottom + 3;
+      const model = editorRef.getModel?.();
+      const Range = window.monaco?.Range;
+      if (!model?.deltaDecorations || !Range) return false;
+      const column = lineEndColumn(line);
+      const decoration = {
+        range: new Range(line, column, line, column),
+        options: {
+          after: {
+            content: `  ${ghostText(view)}`,
+            inlineClassName: "codecoach-inline-ghost"
+          },
+          showIfCollapsed: true
+        }
+      };
+      const decorationIds = model.deltaDecorations([], [decoration]) || [];
+      presentation = { type: "monaco", model, decorationIds };
+      mountControls(view);
+      scheduleSync();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function showCodeMirror(view, line) {
+    if (!editorRef?.setBookmark) return false;
+    try {
+      const ghost = createGhostNode(view);
+      const marker = editorRef.setBookmark(
+        { line: line - 1, ch: lineEndColumn(line) },
+        { widget: ghost, insertLeft: false, handleMouseEvents: false }
+      );
+      presentation = { type: "codemirror", marker, ghost };
+      mountControls(view);
+      scheduleSync();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function showCoordinateOverlay(view, line) {
+    const container = editorContainer();
+    if (!container) return;
+    const ghost = createGhostNode(view, true);
+    container.appendChild(ghost);
+    presentation = { type: "overlay", ghost };
+    mountControls(view);
+    positionInline();
+  }
+
+  function mountControls(view) {
+    const container = editorContainer();
+    if (!container) return;
+    controlsHost = createControls(view);
+    if (!controlsHost) return;
+    container.appendChild(controlsHost);
+    scheduleSync();
+  }
+
+  function scheduleSync() {
+    if (!presentation || syncFrame) return;
+    const run = () => {
+      syncFrame = 0;
+      positionInline();
+    };
+    syncFrame = window.requestAnimationFrame?.(run) || window.setTimeout(run, 0);
+  }
+
+  function positionInline() {
+    const container = editorContainer();
+    if (!container || !presentation) return;
+    const containerRect = container.getBoundingClientRect();
+    let left = 12;
+    let top = 24;
+
+    const ghostRect = presentation.ghost?.isConnected ? presentation.ghost.getBoundingClientRect() : null;
+    if (ghostRect && (ghostRect.width || ghostRect.height)) {
+      left = ghostRect.left - containerRect.left;
+      top = ghostRect.bottom - containerRect.top + 3;
+    } else {
+      const coordinates = editorCoordinates(activeLine);
+      if (coordinates) {
+        left = coordinates.left;
+        top = coordinates.top + coordinates.height + 3;
+      }
+    }
+
+    left = Math.max(8, Math.min(left, Math.max(8, containerRect.width - 160)));
+    top = Math.max(4, Math.min(top, Math.max(4, containerRect.height - 34)));
+
+    if (presentation.type === "overlay" && presentation.ghost) {
+      presentation.ghost.style.left = `${left}px`;
+      presentation.ghost.style.top = `${Math.max(2, top - 21)}px`;
+    }
+    if (controlsHost) {
+      controlsHost.style.left = `${left}px`;
+      controlsHost.style.top = `${top}px`;
+    }
+  }
+
+  function editorCoordinates(line) {
+    try {
+      if (editorType === "monaco") {
+        const position = editorRef.getScrolledVisiblePosition?.({ lineNumber: line, column: lineEndColumn(line) });
+        if (position) return { left: position.left, top: position.top, height: position.height || 18 };
+      }
+      if (editorType === "codemirror") {
+        const position = editorRef.cursorCoords?.({ line: line - 1, ch: lineEndColumn(line) }, "local");
+        if (position) return { left: position.left, top: position.top, height: Math.max(16, position.bottom - position.top) };
+      }
+      if (editorType === "ace") {
+        const screen = editorRef.renderer?.textToScreenCoordinates?.(line - 1, lineEndColumn(line));
+        const rect = editorContainer()?.getBoundingClientRect?.();
+        if (screen && rect) {
+          return {
+            left: screen.pageX - window.scrollX - rect.left,
+            top: screen.pageY - window.scrollY - rect.top,
+            height: Number(editorRef.renderer?.lineHeight) || 18
+          };
+        }
+      }
     } catch {}
-    node.style.left = `${Math.max(12, Math.min(window.innerWidth - 580, rect.left + 42))}px`;
-    node.style.top = `${Math.max(12, Math.min(window.innerHeight - 110, top))}px`;
-    document.documentElement.appendChild(node);
-    nativeHandle = { type: "fallback" };
+    return null;
   }
 
   function editorContainer() {
@@ -313,25 +474,31 @@
       if (editorType === "codemirror") return editorRef?.getWrapperElement?.();
       if (editorType === "ace") return editorRef?.container;
     } catch {}
-    return document.querySelector(".monaco-editor,.CodeMirror,.ace_editor,textarea");
+    return document.querySelector(".monaco-editor,.CodeMirror,.ace_editor");
+  }
+
+  function clearPresentation() {
+    if (syncFrame) {
+      window.cancelAnimationFrame?.(syncFrame);
+      window.clearTimeout(syncFrame);
+      syncFrame = 0;
+    }
+    try {
+      if (presentation?.type === "monaco") presentation.model.deltaDecorations?.(presentation.decorationIds || [], []);
+      if (presentation?.type === "codemirror") presentation.marker?.clear?.();
+    } catch {}
+    presentation?.ghost?.remove?.();
+    controlsHost?.remove?.();
+    presentation = null;
+    controlsHost = null;
   }
 
   function hideInline() {
-    try {
-      if (nativeHandle?.type === "monaco" && nativeHandle.zoneId) {
-        nativeHandle.editor.changeViewZones((accessor) => accessor.removeZone(nativeHandle.zoneId));
-      } else if (nativeHandle?.type === "codemirror") {
-        nativeHandle.widget?.clear?.();
-      } else if (nativeHandle?.type === "ace") {
-        nativeHandle.editor?.session?.widgetManager?.removeLineWidget?.(nativeHandle.widget);
-      }
-    } catch {}
-    try { fallbackHost?.remove?.(); } catch {}
-    fallbackHost = null;
-    nativeHandle = null;
+    clearPresentation();
     currentToken = "";
   }
 
+  window.addEventListener("resize", scheduleSync);
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     if (event.data?.source === SOURCE_RENDER) showInline(event.data);
@@ -342,7 +509,7 @@
     }
   });
 
-  const observer = new MutationObserver(() => discoverEditor());
+  const observer = new MutationObserver(discoverEditor);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   [150, 500, 1200, 2500, 5000].forEach((delay) => setTimeout(discoverEditor, delay));
   setInterval(() => {

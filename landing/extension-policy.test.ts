@@ -36,11 +36,14 @@ describe("extension AI access and privacy policy", () => {
     expect(policy).toContain("Guest AI requests are sent through the CodeCoach Firebase backend");
   });
 
-  it("localizes guest onboarding user-facing strings", () => {
+  it("uses a quiet localized guest onboarding action", () => {
     const onboarding = read("src/sidepanel/guest-onboarding.js");
     expect(onboarding).toContain("const STRINGS =");
-    expect(onboarding).toContain("게스트로 계속하기");
-    expect(onboarding).toContain("Continue as guest");
+    expect(onboarding).toContain("먼저 무료로 사용하기 · 10회");
+    expect(onboarding).toContain("Try free first · 10 questions");
+    expect(onboarding).toContain("chrome.storage?.onChanged?.addListener");
+    expect(onboarding).not.toContain("codecoach-guest-divider");
+    expect(onboarding).not.toContain("guestCtaSub");
   });
 
   it("keeps proactive inline coaching quiet and progressive", () => {
@@ -76,5 +79,12 @@ describe("extension AI access and privacy policy", () => {
     expect(composer).toContain("startAiRequest?.(REQUEST_KINDS.chatCoach, text)");
     expect(composer).not.toContain("dispatchFreeChat");
     expect(composer).not.toContain("GET_GUEST_STATUS");
+  });
+
+  it("runs dependency-free guest policy tests without reinstalling Firebase packages", () => {
+    const workflow = read(".github/workflows/proactive-coach.yml");
+    expect(workflow).toContain("working-directory: functions");
+    expect(workflow).toContain("run: npm test");
+    expect(workflow).not.toContain("npm install --ignore-scripts --package-lock=false");
   });
 });

@@ -4,6 +4,7 @@ import { getAllLearningData, getSettings } from "../shared/storage.js";
 import { chatHistoryForContext } from "../shared/chatThreads.js";
 import { ensureGuestSession, getGuestSession } from "../shared/guest-auth.js";
 import { redactSensitiveText } from "../shared/openaiErrors.js";
+import { createSseTextParser, progressiveTextParts } from "./coach-stream.js";
 
 const GUEST_ENDPOINT = "https://us-central1-ai-hint-coach.cloudfunctions.net/guestCoach";
 const COACH_MESSAGE_TYPES = new Set(["START_GUEST_TRIAL", "GET_GUEST_STATUS", "STREAM_GUEST_AI", "STREAM_INLINE_AI"]);
@@ -110,11 +111,16 @@ async function streamGuest({ message, sender, requestId, kind, context }) {
     throw error;
   }
 
+  const eventType = inline ? "INLINE_AI_DELTA" : "AI_STREAM_DELTA";
+  await emitProgressiveText(sender, {
+    requestId,
+    text: payload.text || "",
+    eventType
+  });
+
   if (inline) {
-    sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta: payload.text || "", rawText: payload.text || "" });
     sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText: payload.text || "", kind, model: payload.model, trial: payload.trial });
   } else {
-    sendToOrigin(sender, { type: "AI_STREAM_DELTA", requestId, delta: payload.text || "", rawText: payload.text || "" });
     sendToOrigin(sender, { type: "AI_STREAM_DONE", requestId, rawText: payload.text || "", kind, model: payload.model, trial: payload.trial });
   }
 }
@@ -128,7 +134,7 @@ async function streamInlineWithOwnKey({ message, sender, settings, requestId, ki
     model,
     instructions: aiRequest.instructions,
     input: [{ role: "user", content: [{ type: "input_text", text: aiRequest.inputText }] }],
-    stream: false,
+    stream: true,
     store: false,
     max_output_tokens: maxOutputTokensFor(kind)
   };
@@ -144,11 +150,51 @@ async function streamInlineWithOwnKey({ message, sender, settings, requestId, ki
     body: JSON.stringify(body)
   });
   if (!response.ok) throw new Error(`OpenAI request failed (${response.status}).`);
-  const responseBody = await response.json();
-  const text = extractResponseText(responseBody);
-  if (!text.trim()) throw new Error("OpenAI returned an empty response.");
-  sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta: text, rawText: text });
-  sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText: text, kind, model });
+  if (!response.body) throw new Error("OpenAI response did not include a stream.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = createSseTextParser();
+  let rawText = "";
+
+  const emitDelta = (delta) => {
+    if (!delta) return;
+    rawText += delta;
+    sendToOrigin(sender, { type: "INLINE_AI_DELTA", requestId, delta, rawText });
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    emitDelta(parser.push(decoder.decode(value, { stream: true })));
+  }
+  emitDelta(parser.push(decoder.decode()));
+  emitDelta(parser.finish());
+
+  if (!rawText.trim()) throw new Error("OpenAI returned an empty response.");
+  sendToOrigin(sender, { type: "INLINE_AI_DONE", requestId, rawText, kind, model });
+}
+
+async function emitProgressiveText(sender, { requestId, text, eventType }) {
+  const parts = progressiveTextParts(text);
+  let rawText = "";
+  for (let index = 0; index < parts.length; index += 1) {
+    const delta = parts[index];
+    rawText += delta;
+    sendToOrigin(sender, { type: eventType, requestId, delta, rawText });
+    if (index < parts.length - 1) await delay(progressiveDelay(delta));
+  }
+}
+
+function progressiveDelay(delta) {
+  const length = String(delta || "").trim().length;
+  if (length <= 2) return 12;
+  if (length <= 8) return 18;
+  return 24;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchGuestStatus() {
@@ -204,11 +250,6 @@ function reasoningOptionsForModel(model) {
   const normalized = String(model || "").toLowerCase();
   if (normalized.startsWith("gpt-5")) return { effort: "low" };
   return null;
-}
-
-function extractResponseText(response) {
-  if (typeof response?.output_text === "string") return response.output_text;
-  return (response?.output || []).flatMap((item) => item?.content || []).map((part) => part?.text || part?.output_text || "").filter(Boolean).join("");
 }
 
 function sendToOrigin(sender, payload) {
