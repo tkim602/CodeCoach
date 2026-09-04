@@ -79,6 +79,12 @@
     return false;
   });
 
+  chrome.storage?.onChanged?.addListener((_changes, areaName) => {
+    if (areaName !== "local") return;
+    lastSettingsRefreshAt = 0;
+    refreshSettings().catch(() => {});
+  });
+
   refreshSettings().catch(() => {});
   requestEditorActivity();
   setTimeout(checkCoachState, 2200);
@@ -457,20 +463,20 @@
 
   const STRINGS = {
     en: {
-      planningTitle: "What's your approach?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write it", checkApproach: "Check approach", notNow: "Not now",
+      planningTitle: "What's your approach?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", checkApproach: "Check approach", notNow: "Not now",
       failedTitle: "That run failed.", failedCopy: "Want one debugging question, not the answer?", debugThis: "Debug", dismiss: "Dismiss",
       closeTitle: "Samples pass.", closeCopy: "Check one edge case before submitting?", checkEdges: "Check edge case",
       stuckTitle: "Need a nudge?", stuckCopy: "One next thought, without the solution.", showHint: "Show",
-      tryFreeTitle: "Try free coaching", tryFreeCopy: "10 guest AI questions · no API key required", tryFreeCta: "Start guest", settings: "Settings",
+      tryFreeTitle: "Start without an API key", tryFreeCopy: "10 free questions are available.", tryFreeCta: "Start free", settings: "Settings",
       thinking: "Thinking…", starting: "Starting…", moreSpecific: "More specific", openCoach: "Open coach", done: "Done", close: "Close",
       guestLeft: "Guest · {remaining} left", connectAccess: "Start guest mode or connect your OpenAI API key.", guestUnavailable: "Guest mode is temporarily unavailable.", hintError: "CodeCoach could not generate a hint.", fullSolutionBlocked: "Full solution hidden. Ask for a smaller hint instead."
     },
     ko: {
-      planningTitle: "접근 방법이 어떻게 되나요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "적어보기", checkApproach: "접근 확인", notNow: "나중에",
+      planningTitle: "접근 방법이 어떻게 되나요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", checkApproach: "접근 확인", notNow: "나중에",
       failedTitle: "방금 실행이 실패했습니다.", failedCopy: "정답 말고 디버깅 질문 하나만 볼까요?", debugThis: "디버그", dismiss: "닫기",
       closeTitle: "샘플 테스트는 통과했습니다.", closeCopy: "제출 전에 엣지 케이스 하나 확인할까요?", checkEdges: "엣지 케이스 확인",
       stuckTitle: "작은 힌트가 필요하신가요?", stuckCopy: "정답 없이 다음 생각 하나만 짚어드릴게요.", showHint: "보기",
-      tryFreeTitle: "무료 코칭을 시작해보세요", tryFreeCopy: "무료 AI 질문 10회 · API key 불필요", tryFreeCta: "게스트 시작", settings: "설정",
+      tryFreeTitle: "API key 없이 시작", tryFreeCopy: "무료 질문 10회를 사용할 수 있습니다.", tryFreeCta: "무료로 시작", settings: "설정",
       thinking: "생각 중…", starting: "시작 중…", moreSpecific: "더 구체적으로", openCoach: "코치 열기", done: "완료", close: "닫기",
       guestLeft: "게스트 · {remaining}회 남음", connectAccess: "게스트 모드를 시작하거나 OpenAI API key를 연결하세요.", guestUnavailable: "게스트 모드를 잠시 사용할 수 없습니다.", hintError: "CodeCoach가 힌트를 만들지 못했습니다.", fullSolutionBlocked: "전체 정답 코드는 숨겼습니다. 더 작은 힌트를 요청해 주세요."
     }
