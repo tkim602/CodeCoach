@@ -6,7 +6,7 @@ const bridgeSource = readFileSync(join(process.cwd(), "src/content/inline-nudge-
 const renderMessage = {
   source: "CODING_HINT_COACH_INLINE_RENDER",
   token: "render-token",
-  lineNumber: 3,
+  lineNumber: Number.MAX_SAFE_INTEGER,
   view: {
     title: "What does dp[i - coin] represent?",
     primaryAction: "hint",
@@ -37,7 +37,7 @@ describe("inline nudge page bridge", () => {
 
   it("mounts a visible Monaco overlay and interactive controls", () => {
     const container = createContainer("monaco-editor");
-    const model = { getLineCount: () => 8, getLineMaxColumn: () => 22 };
+    const model = { getLineCount: () => 3, getLineMaxColumn: () => 22, getLineContent: () => "    return answer" };
     const editor = createMonacoEditor(container, model);
     window.monaco = { editor: { getEditors: () => [editor] } };
     const postMessage = vi.spyOn(window, "postMessage");
@@ -50,6 +50,8 @@ describe("inline nudge page bridge", () => {
     expect(ghost).not.toBeNull();
     expect(ghost.textContent).toContain("dp[i - coin]");
     expect(ghost.style.left).toBe("120px");
+    expect(ghost.style.top).toBe("60px");
+    expect(editor.getScrolledVisiblePosition).toHaveBeenCalledWith({ lineNumber: 3, column: 5 });
     expect(controls).not.toBeNull();
 
     controls.querySelector("button").click();
@@ -72,7 +74,7 @@ describe("inline nudge page bridge", () => {
     const ghost = container.querySelector(".codecoach-inline-ghost-overlay");
     expect(ghost).not.toBeNull();
     expect(ghost.textContent).toContain("dp[i - coin]");
-    expect(ghost.style.top).toBe("40px");
+    expect(ghost.style.top).toBe("80px");
   });
 
   it("mounts the same visible overlay for CodeMirror", () => {
@@ -80,11 +82,11 @@ describe("inline nudge page bridge", () => {
     wrapper.CodeMirror = {
       getValue: () => "code",
       getCursor: () => ({ line: 2, ch: 4 }),
-      getLine: () => "return value",
-      lineCount: () => 6,
+      getLine: () => "    return value",
+      lineCount: () => 3,
       hasFocus: () => true,
       getWrapperElement: () => wrapper,
-      cursorCoords: () => ({ left: 130, top: 100, bottom: 118 }),
+      cursorCoords: vi.fn(() => ({ left: 130, top: 100, bottom: 118 })),
       on: vi.fn(),
       off: vi.fn()
     };
@@ -95,7 +97,8 @@ describe("inline nudge page bridge", () => {
     const ghost = wrapper.querySelector(".codecoach-inline-ghost-overlay");
     expect(ghost).not.toBeNull();
     expect(ghost.style.left).toBe("90px");
-    expect(ghost.style.top).toBe("40px");
+    expect(ghost.style.top).toBe("58px");
+    expect(wrapper.CodeMirror.cursorCoords).toHaveBeenCalledWith({ line: 2, ch: 4 }, "page");
     const controls = wrapper.querySelector(".codecoach-inline-controls");
     expect(controls).not.toBeNull();
     expect(getComputedStyle(controls).backgroundColor).toBe("rgba(0, 0, 0, 0)");
@@ -115,7 +118,7 @@ describe("inline nudge page bridge", () => {
 
     const ghost = wrapper.querySelector(".codecoach-inline-ghost-overlay");
     expect(ghost).not.toBeNull();
-    expect(ghost.style.top).toBe("40px");
+    expect(ghost.style.top).toBe("80px");
     expect(wrapper.querySelector(".codecoach-inline-controls")).not.toBeNull();
   });
 
@@ -205,7 +208,7 @@ function createMonacoEditor(container, model) {
     getModel: () => model,
     getPosition: () => ({ lineNumber: 3, column: 5 }),
     getContainerDomNode: () => container,
-    getScrolledVisiblePosition: () => ({ left: 120, top: 42, height: 18 }),
+    getScrolledVisiblePosition: vi.fn(() => ({ left: 120, top: 42, height: 18 })),
     hasTextFocus: () => true,
     onDidChangeModelContent: vi.fn(() => ({ dispose: vi.fn() })),
     onDidChangeCursorPosition: vi.fn(() => ({ dispose: vi.fn() })),
