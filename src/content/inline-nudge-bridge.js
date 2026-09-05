@@ -264,6 +264,7 @@
   }
 
   function ghostText(view) {
+    if (view?.collapsed) return "";
     return [view?.tone === "success" ? "OK" : "CodeCoach", view?.title, view?.body]
       .filter(Boolean)
       .join(": ")
@@ -289,6 +290,7 @@
       input = document.createElement("input");
       input.type = "text";
       input.placeholder = view.inputPlaceholder || "";
+      input.value = view.inputValue || "";
       input.dataset.inlineInput = "1";
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !event.shiftKey && view?.primaryAction) {
@@ -357,6 +359,7 @@
     ghostHost.className = "codecoach-inline-ghost-overlay";
     ghostHost.dataset.codecoachInlineUi = "1";
     ghostHost.textContent = ghostText(view);
+    ghostHost.hidden = Boolean(view.collapsed);
     container.appendChild(ghostHost);
 
     controlsHost = createControls(view);
@@ -395,8 +398,8 @@
       ghostHost.style.maxHeight = `${Math.max(18, rect.height - lineTop - controlsHeight - 12)}px`;
       ghostHost.style.overflowY = "auto";
       ghostHost.style.pointerEvents = "auto";
-      const answerHeight = ghostHost.getBoundingClientRect().height || coordinates.height;
-      controlsHost.style.top = `${lineTop + answerHeight + 6}px`;
+      const answerHeight = ghostHost.hidden ? 0 : ghostHost.getBoundingClientRect().height || coordinates.height;
+      controlsHost.style.top = `${lineTop + answerHeight + (ghostHost.hidden ? 0 : 6)}px`;
     }
   }
 

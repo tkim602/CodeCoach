@@ -627,7 +627,9 @@ footer {
     without opening the side panel. The extension locally observes editor content, cursor position,
     editing activity, and visible run or submission results to position the prompt and decide
     when to offer help. Displaying an invitation to ask for a hint does not itself send the
-    editor content to OpenAI. You can dismiss the inline coach using Hide.
+    editor content to OpenAI. Hide collapses the inline coach to a Show coach control;
+    reopening a saved hint does not make another AI request. Inline coaching can be disabled
+    in the extension settings.
   </p>
   <p>
     CodeCoach does not automatically send your data to OpenAI merely because you visit a page.
