@@ -8,9 +8,10 @@ Show CodeCoach as soon as a supported problem editor is ready, without revealing
 
 - Show one opening prompt about 1.5 seconds after the problem and editor are detected.
 - Ask `How do you want to start?` / `어떻게 시작할까요?`.
-- Offer `Write approach`, `Need a hint`, and `Not now` actions.
+- Offer `Write approach`, `Need a hint`, and `Hide` actions.
 - Keep the opening prompt to once per problem.
 - Render coach output on the virtual line after the final code line, matching that line's indentation.
+- Keep the inline coach visible through code edits and submission results until the learner selects `Hide` / `숨기기`.
 - Keep `Thinking…` visible during streaming and render the completed answer once.
 - Show stuck coaching after 45 seconds and allow non-failure follow-ups after a 2-minute cooldown.
 - Keep the existing three-intervention limit and solution-code blocking.

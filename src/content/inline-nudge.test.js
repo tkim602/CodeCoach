@@ -36,6 +36,18 @@ describe("inline coach localization", () => {
     expect(source).toContain('if (message.type === "INLINE_AI_DELTA") return false;');
   });
 
+  it("stays visible until the learner explicitly hides it", () => {
+    expect(source).toContain('hide: "Hide"');
+    expect(source).toContain('hide: "숨기기"');
+    expect(source).toContain('renderState({ title: t("thinking"), tone: "neutral", secondaryAction: "dismiss", secondaryLabel: t("hide") });');
+    expect(source).not.toContain("if (isPassiveReason(activeReason)) hideInline();");
+    expect(source).not.toContain("function isPassiveReason");
+    expect(source).not.toContain('tertiaryLabel: t("notNow")');
+    expect(source).toContain("let hiddenForProblem = false;");
+    expect(source).toContain("if (hiddenForProblem || activeReason");
+    expect(source).toContain("hiddenForProblem = true;");
+  });
+
   it("refreshes settings through the extension-level storage change event", async () => {
     vi.useFakeTimers();
     const storageListener = vi.fn();
