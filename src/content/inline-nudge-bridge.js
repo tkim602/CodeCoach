@@ -386,11 +386,17 @@
     const lineTop = Math.max(2, Math.min(coordinates.top + (afterLastLine ? coordinates.height : 0), Math.max(2, rect.height - 24)));
     ghostHost.style.left = `${left}px`;
     ghostHost.style.top = `${lineTop}px`;
+    ghostHost.style.maxWidth = `${Math.max(1, rect.width - left - 12)}px`;
 
     if (controlsHost) {
-      const controlsTop = Math.max(4, Math.min(lineTop + coordinates.height + 3, Math.max(4, rect.height - 34)));
       controlsHost.style.left = `${left}px`;
-      controlsHost.style.top = `${controlsTop}px`;
+      controlsHost.style.maxWidth = ghostHost.style.maxWidth;
+      const controlsHeight = controlsHost.getBoundingClientRect().height;
+      ghostHost.style.maxHeight = `${Math.max(18, rect.height - lineTop - controlsHeight - 12)}px`;
+      ghostHost.style.overflowY = "auto";
+      ghostHost.style.pointerEvents = "auto";
+      const answerHeight = ghostHost.getBoundingClientRect().height || coordinates.height;
+      controlsHost.style.top = `${lineTop + answerHeight + 6}px`;
     }
   }
 

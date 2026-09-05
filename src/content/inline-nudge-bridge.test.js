@@ -186,6 +186,26 @@ describe("inline nudge page bridge", () => {
       value: "Use a heap"
     }), "*");
   });
+
+  it("places actions below a wrapped answer and recomputes on resize", () => {
+    const container = createContainer("monaco-editor");
+    window.monaco = { editor: { getEditors: () => [createMonacoEditor(container, {
+      getLineCount: () => 3, getLineContent: () => "    return answer"
+    })] } };
+    runBridge();
+    dispatchWindowMessage(renderMessage);
+    const ghost = container.querySelector(".codecoach-inline-ghost-overlay");
+    const controls = container.querySelector(".codecoach-inline-controls");
+    ghost.getBoundingClientRect = () => ({ height: 96 });
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(20);
+    expect(parseFloat(controls.style.top)).toBe(parseFloat(ghost.style.top) + 102);
+    expect(ghost.style.maxWidth).toBe("368px");
+    ghost.getBoundingClientRect = () => ({ height: 144 });
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(20);
+    expect(parseFloat(controls.style.top)).toBe(parseFloat(ghost.style.top) + 150);
+  });
 });
 
 function createContainer(className, rect = { left: 0, top: 0, width: 500, height: 300 }) {

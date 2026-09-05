@@ -111,11 +111,10 @@ async function streamGuest({ message, sender, requestId, kind, context }) {
     throw error;
   }
 
-  const eventType = inline ? "INLINE_AI_DELTA" : "AI_STREAM_DELTA";
-  await emitProgressiveText(sender, {
+  if (!inline) await emitProgressiveText(sender, {
     requestId,
     text: payload.text || "",
-    eventType
+    eventType: "AI_STREAM_DELTA"
   });
 
   if (inline) {
