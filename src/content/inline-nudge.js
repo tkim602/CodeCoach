@@ -24,6 +24,7 @@
   let lastCloseEventId = "";
   let dismissedReasons = new Set();
   let shownReasons = new Set();
+  let hiddenForProblem = false;
   let uiLanguage = "en";
   let editorActivity = { editorType: "", focused: false, cursorLine: 1, lineCount: 1, lastChangeAt: 0 };
   let inlineToken = "";
@@ -50,7 +51,7 @@
   chrome.runtime.onMessage.addListener((message) => {
     if (!activeRequestId || message?.requestId !== activeRequestId) return false;
     if (message.type === "INLINE_AI_START") {
-      renderState({ title: t("thinking"), tone: "neutral" });
+      renderState({ title: t("thinking"), tone: "neutral", secondaryAction: "dismiss", secondaryLabel: t("hide") });
       return false;
     }
     if (message.type === "INLINE_AI_DELTA") return false;
@@ -111,7 +112,6 @@
     const result = context.testResults || {};
     const signature = quickSignature(context.code || "");
     if (result.status === "passed" && result.kind === "submit") {
-      hideInline();
       shownReasons.add("solved");
       return;
     }
@@ -119,7 +119,6 @@
     if (signature && signature !== lastCodeSignature) {
       if (lastCodeSignature) {
         lastProgressAt = Math.max(Date.now(), editorActivity.lastChangeAt || 0);
-        if (isPassiveReason(activeReason)) hideInline();
       }
       lastCodeSignature = signature;
     }
@@ -158,7 +157,7 @@
 
   function maybeShow(reason, context, eventId = "") {
     const reasonKey = eventId ? `${reason}:${eventId}` : reason;
-    if (activeReason || dismissedReasons.has(reasonKey) || shownReasons.has(reasonKey)) return;
+    if (hiddenForProblem || activeReason || dismissedReasons.has(reasonKey) || shownReasons.has(reasonKey)) return;
     if (interventions >= MAX_INTERVENTIONS_PER_PROBLEM) return;
     if (Date.now() - lastNudgeAt < NUDGE_COOLDOWN_MS && reason !== "failed") return;
     activeReason = reason;
@@ -180,24 +179,26 @@
         secondaryAction: "hint",
         secondaryLabel: t("needHint"),
         tertiaryAction: "dismiss",
-        tertiaryLabel: t("notNow")
+        tertiaryLabel: t("hide")
       });
       return;
     }
     if (reason === "failed") {
-      renderState({ title: t("failedTitle"), body: t("failedCopy"), primaryAction: "hint", primaryLabel: t("debugThis"), secondaryAction: "dismiss", secondaryLabel: t("dismiss") });
+      renderState({ title: t("failedTitle"), body: t("failedCopy"), primaryAction: "hint", primaryLabel: t("debugThis"), secondaryAction: "dismiss", secondaryLabel: t("hide") });
       return;
     }
     if (reason === "close") {
-      renderState({ title: t("closeTitle"), body: t("closeCopy"), tone: "success", primaryAction: "hint", primaryLabel: t("checkEdges"), secondaryAction: "dismiss", secondaryLabel: t("dismiss") });
+      renderState({ title: t("closeTitle"), body: t("closeCopy"), tone: "success", primaryAction: "hint", primaryLabel: t("checkEdges"), secondaryAction: "dismiss", secondaryLabel: t("hide") });
       return;
     }
-    renderState({ title: t("stuckTitle"), body: t("stuckCopy"), primaryAction: "hint", primaryLabel: t("showHint"), secondaryAction: "dismiss", secondaryLabel: t("dismiss") });
+    renderState({ title: t("stuckTitle"), body: t("stuckCopy"), primaryAction: "hint", primaryLabel: t("showHint"), secondaryAction: "dismiss", secondaryLabel: t("hide") });
   }
 
   function handleInlineAction(action, value) {
-    if (action === "dismiss" || action === "done") {
-      if (action === "dismiss") dismissedReasons.add(activeReasonKey || activeReason);
+    if (action === "dismiss") {
+      dismissedReasons.add(activeReasonKey || activeReason);
+      hiddenForProblem = true;
+      activeRequestId = "";
       hideInline();
       return;
     }
@@ -210,7 +211,7 @@
         primaryAction: "check_approach",
         primaryLabel: t("checkApproach"),
         secondaryAction: "dismiss",
-        secondaryLabel: t("notNow")
+        secondaryLabel: t("hide")
       });
       return;
     }
@@ -244,7 +245,7 @@
 
   async function requestHint(level) {
     const context = await freshContext();
-    if (!context) return;
+    if (!context || hiddenForProblem) return;
     activeRequestId = crypto.randomUUID();
     const response = await sendMessage({
       type: "STREAM_INLINE_AI",
@@ -261,6 +262,10 @@
             : context.userNote || ""
       }
     }).catch((error) => ({ ok: false, error: error.message }));
+    if (hiddenForProblem) {
+      activeRequestId = "";
+      return;
+    }
     if (!response?.ok) {
       activeRequestId = "";
       if (response?.code === "GUEST_NOT_STARTED") {
@@ -273,7 +278,7 @@
 
   async function requestApproachFeedback(userMessage) {
     const context = await freshContext();
-    if (!context) return;
+    if (!context || hiddenForProblem) return;
     activeRequestId = crypto.randomUUID();
     const response = await sendMessage({
       type: "STREAM_INLINE_AI",
@@ -283,6 +288,10 @@
       chatHistory: [],
       context: { ...context, code: String(context.code || "").trim().length > 80 ? context.code : "" }
     }).catch((error) => ({ ok: false, error: error.message }));
+    if (hiddenForProblem) {
+      activeRequestId = "";
+      return;
+    }
     if (!response?.ok) {
       activeRequestId = "";
       if (response?.code === "GUEST_NOT_STARTED") {
@@ -300,13 +309,16 @@
       primaryAction: "start_guest",
       primaryLabel: t("tryFreeCta"),
       secondaryAction: "settings",
-      secondaryLabel: t("settings")
+      secondaryLabel: t("settings"),
+      tertiaryAction: "dismiss",
+      tertiaryLabel: t("hide")
     });
   }
 
   async function startGuestThenHint() {
-    renderState({ title: t("starting") });
+    renderState({ title: t("starting"), secondaryAction: "dismiss", secondaryLabel: t("hide") });
     const response = await sendMessage({ type: "START_GUEST_TRIAL" }).catch((error) => ({ ok: false, error: error.message }));
+    if (hiddenForProblem) return;
     if (!response?.ok) {
       renderError(response?.error || t("guestUnavailable"));
       return;
@@ -321,17 +333,18 @@
       title: text || t("thinking"),
       primaryAction: done ? primaryAction : "",
       primaryLabel: done ? primaryLabel : "",
-      secondaryAction: done ? "done" : "",
-      secondaryLabel: done ? t("done") : "",
+      secondaryAction: done ? "dismiss" : "",
+      secondaryLabel: done ? t("hide") : "",
       trialText: trial && Number.isFinite(Number(trial.remaining)) ? t("guestLeft", { remaining: trial.remaining }) : ""
     });
   }
 
   function renderError(text) {
-    renderState({ title: text, secondaryAction: "done", secondaryLabel: t("close") });
+    renderState({ title: text, secondaryAction: "dismiss", secondaryLabel: t("hide") });
   }
 
   function renderState(view) {
+    if (hiddenForProblem) return;
     inlineToken ||= crypto.randomUUID();
     window.postMessage({
       source: SOURCE_RENDER,
@@ -394,11 +407,8 @@
     interventions = 0;
     dismissedReasons = new Set();
     shownReasons = new Set();
+    hiddenForProblem = false;
     hideInline();
-  }
-
-  function isPassiveReason(reason) {
-    return ["planning", "stuck", "failed", "close"].includes(reason);
   }
 
   function quickSignature(text) {
@@ -445,21 +455,21 @@
 
   const STRINGS = {
     en: {
-      planningTitle: "How do you want to start?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", needHint: "Need a hint", checkApproach: "Check approach", notNow: "Not now",
-      failedTitle: "That run failed.", failedCopy: "Want one debugging question, not the answer?", debugThis: "Debug", dismiss: "Dismiss",
+      planningTitle: "How do you want to start?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", needHint: "Need a hint", checkApproach: "Check approach", hide: "Hide",
+      failedTitle: "That run failed.", failedCopy: "Want one debugging question, not the answer?", debugThis: "Debug",
       closeTitle: "Samples pass.", closeCopy: "Check one edge case before submitting?", checkEdges: "Check edge case",
       stuckTitle: "Need a nudge?", stuckCopy: "One next thought, without the solution.", showHint: "Show",
       tryFreeTitle: "Start without an API key", tryFreeCopy: "10 free questions are available.", tryFreeCta: "Start free", settings: "Settings",
-      thinking: "Thinking…", starting: "Starting…", moreSpecific: "More specific", openCoach: "Open coach", done: "Done", close: "Close",
+      thinking: "Thinking…", starting: "Starting…", moreSpecific: "More specific", openCoach: "Open coach",
       guestLeft: "Guest · {remaining} left", connectAccess: "Start guest mode or connect your OpenAI API key.", guestUnavailable: "Guest mode is temporarily unavailable.", hintError: "CodeCoach could not generate a hint.", fullSolutionBlocked: "Full solution hidden. Ask for a smaller hint instead."
     },
     ko: {
-      planningTitle: "어떻게 시작할까요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", needHint: "힌트 필요", checkApproach: "접근 확인", notNow: "나중에",
-      failedTitle: "방금 실행이 실패했습니다.", failedCopy: "정답 말고 디버깅 질문 하나만 볼까요?", debugThis: "디버그", dismiss: "닫기",
+      planningTitle: "어떻게 시작할까요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", needHint: "힌트 필요", checkApproach: "접근 확인", hide: "숨기기",
+      failedTitle: "방금 실행이 실패했습니다.", failedCopy: "정답 말고 디버깅 질문 하나만 볼까요?", debugThis: "디버그",
       closeTitle: "샘플 테스트는 통과했습니다.", closeCopy: "제출 전에 엣지 케이스 하나 확인할까요?", checkEdges: "엣지 케이스 확인",
       stuckTitle: "작은 힌트가 필요하신가요?", stuckCopy: "정답 없이 다음 생각 하나만 짚어드릴게요.", showHint: "보기",
       tryFreeTitle: "API key 없이 시작", tryFreeCopy: "무료 질문 10회를 사용할 수 있습니다.", tryFreeCta: "무료로 시작", settings: "설정",
-      thinking: "생각 중…", starting: "시작 중…", moreSpecific: "더 구체적으로", openCoach: "코치 열기", done: "완료", close: "닫기",
+      thinking: "생각 중…", starting: "시작 중…", moreSpecific: "더 구체적으로", openCoach: "코치 열기",
       guestLeft: "게스트 · {remaining}회 남음", connectAccess: "게스트 모드를 시작하거나 OpenAI API key를 연결하세요.", guestUnavailable: "게스트 모드를 잠시 사용할 수 없습니다.", hintError: "CodeCoach가 힌트를 만들지 못했습니다.", fullSolutionBlocked: "전체 정답 코드는 숨겼습니다. 더 작은 힌트를 요청해 주세요."
     }
   };
