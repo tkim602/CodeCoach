@@ -77,6 +77,33 @@ describe("inline nudge page bridge", () => {
     expect(ghost.style.top).toBe("80px");
   });
 
+  it.each(["monaco-editor", "CodeMirror"])("keeps the reopen control at the code indentation in %s", (className) => {
+    const container = createContainer(className);
+    if (className === "monaco-editor") {
+      window.monaco = { editor: { getEditors: () => [createMonacoEditor(container, {
+        getLineCount: () => 3, getLineContent: () => "    return answer"
+      })] } };
+    } else {
+      container.CodeMirror = {
+        getValue: () => "    return answer", getCursor: () => ({ line: 2, ch: 4 }),
+        getLine: () => "    return answer", lineCount: () => 3,
+        getWrapperElement: () => container, cursorCoords: () => ({ left: 120, top: 42, bottom: 60 }),
+        on: vi.fn(), off: vi.fn()
+      };
+    }
+    const postMessage = vi.spyOn(window, "postMessage");
+    runBridge();
+    dispatchWindowMessage({ ...renderMessage, view: { collapsed: true, primaryAction: "reopen", primaryLabel: "Show coach" } });
+    const ghost = container.querySelector(".codecoach-inline-ghost-overlay");
+    const controls = container.querySelector(".codecoach-inline-controls");
+    expect(ghost.hidden).toBe(true);
+    expect(ghost.textContent).toBe("");
+    expect(controls.style.left).toBe("120px");
+    expect(controls.style.top).toBe("60px");
+    controls.querySelector("button").click();
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ action: "reopen", token: "render-token" }), "*");
+  });
+
   it("mounts the same visible overlay for CodeMirror", () => {
     const wrapper = createContainer("CodeMirror", { left: 40, top: 60, width: 500, height: 300 });
     wrapper.CodeMirror = {

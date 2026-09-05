@@ -25,6 +25,8 @@
   let dismissedReasons = new Set();
   let shownReasons = new Set();
   let hiddenForProblem = false;
+  let lastView = null;
+  let hiddenReason = "";
   let uiLanguage = "en";
   let editorActivity = { editorType: "", focused: false, cursorLine: 1, lineCount: 1, lastChangeAt: 0 };
   let inlineToken = "";
@@ -106,6 +108,10 @@
     if (problemKey && problemKey !== currentProblem) resetProblem(problemKey);
     if (!context.allowed || !editorActivity.editorType) {
       hideInline();
+      return;
+    }
+    if (hiddenForProblem) {
+      if (!inlineToken) renderCollapsed();
       return;
     }
 
@@ -195,11 +201,27 @@
   }
 
   function handleInlineAction(action, value) {
+    if (action === "reopen") {
+      if (!enabled || !hiddenForProblem) return;
+      hiddenForProblem = false;
+      activeReason = hiddenReason || "planning";
+      activeReasonKey = activeReason;
+      if (lastView) renderState(lastView);
+      else {
+        currentLevel = 1;
+        renderPrompt("planning");
+      }
+      return;
+    }
     if (action === "dismiss") {
+      hiddenReason = activeReason;
       dismissedReasons.add(activeReasonKey || activeReason);
+      if (activeRequestId || lastView?.title === t("starting")) lastView = null;
+      if (lastView?.showInput) lastView = { ...lastView, inputValue: value };
       hiddenForProblem = true;
       activeRequestId = "";
       hideInline();
+      renderCollapsed();
       return;
     }
     if (action === "expand_plan") {
@@ -244,12 +266,13 @@
   }
 
   async function requestHint(level) {
+    const token = inlineToken;
     const context = await freshContext();
-    if (!context || hiddenForProblem) return;
-    activeRequestId = crypto.randomUUID();
+    if (!context || hiddenForProblem || token !== inlineToken) return;
+    const requestId = activeRequestId = crypto.randomUUID();
     const response = await sendMessage({
       type: "STREAM_INLINE_AI",
-      requestId: activeRequestId,
+      requestId,
       kind: "hint",
       hintLevel: Math.min(3, Math.max(1, level)),
       context: {
@@ -262,10 +285,7 @@
             : context.userNote || ""
       }
     }).catch((error) => ({ ok: false, error: error.message }));
-    if (hiddenForProblem) {
-      activeRequestId = "";
-      return;
-    }
+    if (activeRequestId !== requestId) return;
     if (!response?.ok) {
       activeRequestId = "";
       if (response?.code === "GUEST_NOT_STARTED") {
@@ -277,21 +297,19 @@
   }
 
   async function requestApproachFeedback(userMessage) {
+    const token = inlineToken;
     const context = await freshContext();
-    if (!context || hiddenForProblem) return;
-    activeRequestId = crypto.randomUUID();
+    if (!context || hiddenForProblem || token !== inlineToken) return;
+    const requestId = activeRequestId = crypto.randomUUID();
     const response = await sendMessage({
       type: "STREAM_INLINE_AI",
-      requestId: activeRequestId,
+      requestId,
       kind: "chat_coach",
       userMessage,
       chatHistory: [],
       context: { ...context, code: String(context.code || "").trim().length > 80 ? context.code : "" }
     }).catch((error) => ({ ok: false, error: error.message }));
-    if (hiddenForProblem) {
-      activeRequestId = "";
-      return;
-    }
+    if (activeRequestId !== requestId) return;
     if (!response?.ok) {
       activeRequestId = "";
       if (response?.code === "GUEST_NOT_STARTED") {
@@ -317,8 +335,9 @@
 
   async function startGuestThenHint() {
     renderState({ title: t("starting"), secondaryAction: "dismiss", secondaryLabel: t("hide") });
+    const token = inlineToken;
     const response = await sendMessage({ type: "START_GUEST_TRIAL" }).catch((error) => ({ ok: false, error: error.message }));
-    if (hiddenForProblem) return;
+    if (hiddenForProblem || token !== inlineToken) return;
     if (!response?.ok) {
       renderError(response?.error || t("guestUnavailable"));
       return;
@@ -345,6 +364,7 @@
 
   function renderState(view) {
     if (hiddenForProblem) return;
+    lastView = view;
     inlineToken ||= crypto.randomUUID();
     window.postMessage({
       source: SOURCE_RENDER,
@@ -359,6 +379,17 @@
     inlineToken = "";
     activeReason = "";
     activeReasonKey = "";
+  }
+
+  function renderCollapsed() {
+    if (!enabled || !activeContext?.allowed || !editorActivity.editorType) return;
+    inlineToken ||= crypto.randomUUID();
+    window.postMessage({
+      source: SOURCE_RENDER,
+      token: inlineToken,
+      lineNumber: Number.MAX_SAFE_INTEGER,
+      view: { collapsed: true, primaryAction: "reopen", primaryLabel: t("showCoach") }
+    }, "*");
   }
 
   async function refreshSettings() {
@@ -408,6 +439,8 @@
     dismissedReasons = new Set();
     shownReasons = new Set();
     hiddenForProblem = false;
+    lastView = null;
+    hiddenReason = "";
     hideInline();
   }
 
@@ -455,6 +488,7 @@
 
   const STRINGS = {
     en: {
+      showCoach: "Show coach",
       planningTitle: "How do you want to start?", planningCopy: "Explain it in one or two sentences before you code.", planningPlaceholder: "I'll start by...", writeApproach: "Write approach", needHint: "Need a hint", checkApproach: "Check approach", hide: "Hide",
       failedTitle: "That run failed.", failedCopy: "Want one debugging question, not the answer?", debugThis: "Debug",
       closeTitle: "Samples pass.", closeCopy: "Check one edge case before submitting?", checkEdges: "Check edge case",
@@ -464,6 +498,7 @@
       guestLeft: "Guest · {remaining} left", connectAccess: "Start guest mode or connect your OpenAI API key.", guestUnavailable: "Guest mode is temporarily unavailable.", hintError: "CodeCoach could not generate a hint.", fullSolutionBlocked: "Full solution hidden. Ask for a smaller hint instead."
     },
     ko: {
+      showCoach: "코치 다시 보기",
       planningTitle: "어떻게 시작할까요?", planningCopy: "코드를 더 작성하기 전에 한두 문장으로 적어보세요.", planningPlaceholder: "먼저 이렇게 생각해볼게요...", writeApproach: "접근 적기", needHint: "힌트 필요", checkApproach: "접근 확인", hide: "숨기기",
       failedTitle: "방금 실행이 실패했습니다.", failedCopy: "정답 말고 디버깅 질문 하나만 볼까요?", debugThis: "디버그",
       closeTitle: "샘플 테스트는 통과했습니다.", closeCopy: "제출 전에 엣지 케이스 하나 확인할까요?", checkEdges: "엣지 케이스 확인",

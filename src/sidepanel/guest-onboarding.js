@@ -58,7 +58,7 @@ function installGuestChoice() {
 
   const style = document.createElement("style");
   style.textContent = `
-    .codecoach-guest-button{align-self:center;border:0;border-radius:4px;padding:7px 5px;background:transparent;color:var(--muted-strong);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline;text-underline-offset:3px}.codecoach-guest-button:hover{color:var(--text)}.codecoach-guest-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.codecoach-guest-button:disabled{opacity:.55;cursor:default}.codecoach-guest-note{margin:0;text-align:center;color:var(--muted);font-size:11px}.codecoach-guest-status{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(97,40,255,.18);background:var(--accent-soft);color:var(--accent-text);border-radius:999px;padding:4px 8px;font-size:11px;font-weight:650;margin-left:auto;white-space:nowrap}.codecoach-guest-status.is-empty{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-border)}
+    .codecoach-guest-button{align-self:center;border:0;border-radius:4px;padding:7px 5px;background:transparent;color:var(--muted-strong);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline;text-underline-offset:3px}.codecoach-guest-button:hover{color:var(--text)}.codecoach-guest-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.codecoach-guest-button:disabled{opacity:.55;cursor:default}.codecoach-guest-note{margin:0;text-align:center;color:var(--muted);font-size:11px}.codecoach-guest-status{display:inline-block;border:0;background:transparent;color:var(--muted);border-radius:0;padding:4px 0;font-size:11px;font-weight:400;margin-left:auto;white-space:nowrap}.codecoach-guest-status.is-empty{color:var(--warn)}
   `;
   document.head.appendChild(style);
   saveView.append(button, note);
@@ -163,7 +163,7 @@ const STRINGS = {
     continueGuest: "Try free first · 10 questions",
     startingGuest: "Starting...",
     guestUnavailable: "Guest mode is temporarily unavailable.",
-    guestLeft: "Guest · {remaining} left",
+    guestLeft: "{remaining} left",
     guestUsedBadge: "Guest trial used · add API key",
     guestUsed: "Free questions used",
     guestUsedNote: "Guest trial used. Connect your OpenAI API key to continue."
@@ -172,7 +172,7 @@ const STRINGS = {
     continueGuest: "먼저 무료로 사용하기 · 10회",
     startingGuest: "시작 중...",
     guestUnavailable: "게스트 모드를 잠시 사용할 수 없습니다.",
-    guestLeft: "게스트 · {remaining}회 남음",
+    guestLeft: "{remaining}회 남음",
     guestUsedBadge: "게스트 체험 종료 · API key 연결",
     guestUsed: "무료 질문 사용 완료",
     guestUsedNote: "게스트 체험을 모두 사용했습니다. 계속하려면 OpenAI API key를 연결하세요."

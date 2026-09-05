@@ -158,7 +158,13 @@ Before publishing a build that enables guest AI, verify the Firebase project use
 - [LeetCode](https://leetcode.com/problemset/)
 - [Programmers / 프로그래머스](https://school.programmers.co.kr/learn/challenges)
 
-The current Chrome Web Store release is version `1.1.0`.
+The manifest and submission package target version `1.2.0`. This repository does not
+indicate whether Chrome Web Store review or publication has completed.
+
+Before submitting 1.2.0, merge the release PR and verify the public privacy policy
+shows version `1.2.0` and the date `2026-09-05`. Keep the Web Store privacy disclosures
+consistent with guest backend processing, optional authentication and sync, and
+user-requested transmission of problem context, code attempts, and conversation history.
 
 ## Tech stack
 

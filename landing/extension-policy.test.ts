@@ -6,6 +6,25 @@ import { resolveAiAccessMode } from "../src/sidepanel/aiAccessMode.js";
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 
 describe("extension AI access and privacy policy", () => {
+  it("keeps the 1.2.0 release metadata and shipped/hosted policies aligned", () => {
+    const manifest = JSON.parse(read("manifest.json"));
+    expect(manifest.version).toBe("1.2.0");
+    expect(JSON.parse(read("package.json")).version).toBe(manifest.version);
+    const lock = JSON.parse(read("package-lock.json"));
+    expect(lock.version).toBe(manifest.version);
+    expect(lock.packages[""].version).toBe(manifest.version);
+    const policy = read("assets/privacy-policy.html");
+    expect(read("landing/public/privacy-policy.html")).toBe(policy);
+    expect(read("docs/privacy-policy.html")).toBe(policy);
+    expect(policy).toContain("Version: 1.2.0");
+    expect(policy).toContain("Last updated: 2026-09-05");
+    expect(policy).toContain("Inline coaching prompts can appear automatically");
+    expect(policy).toContain("failed and passed snapshots");
+    expect(policy).toContain("Guest quota and operational records");
+    expect(policy).toContain("not a promise of zero retention");
+    expect(policy).toContain("does not implement automatic expiry");
+  });
+
   it("uses supported low reasoning for GPT-5 inline and BYOK requests", () => {
     expect(read("src/background/service-worker.js")).toContain('return { effort: "low" };');
     expect(read("src/background/coach-router.js")).toContain('return { effort: "low" };');

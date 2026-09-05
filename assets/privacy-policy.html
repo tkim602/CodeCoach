@@ -97,7 +97,8 @@ footer {
 
   <p class="meta">
     <strong>CodeCoach</strong> — Chrome Extension<br>
-    Last updated: 2026-09-03
+    Version: 1.2.0<br>
+    Last updated: 2026-09-05
   </p>
 
   <p>
@@ -177,7 +178,8 @@ footer {
 
   <p>
     Locally stored data remains on your device unless you delete it, uninstall the extension,
-    clear Chrome extension storage, or enable optional cloud sync.
+    clear Chrome extension storage, or enable optional cloud sync. Relevant locally stored content
+    may also be transmitted when you request an AI feature, as described below.
   </p>
 
   <h3>3.2 Information used for AI requests</h3>
@@ -190,6 +192,8 @@ footer {
   <ul>
     <li>Your typed question, message, or instruction</li>
     <li>Your current editor code from the supported coding-practice page</li>
+    <li>Relevant recent same-problem chat messages and previously generated analysis, when included for continuity</li>
+    <li>Saved same-problem code attempts, including failed and passed snapshots and their results, when used for wrong-answer notes or code comparisons</li>
     <li>Visible problem context from the supported coding-practice page, if included for that request or enabled in settings</li>
     <li>Selected text, selected code lines, run results, error messages, or test output, when used for the requested feature</li>
     <li>Basic request metadata, such as platform name, programming language, hint level, request type, and selected AI model where applicable</li>
@@ -223,7 +227,7 @@ footer {
     <li>Your current editor code</li>
     <li>Selected text or selected code lines</li>
     <li>Visible run results, test results, error messages, or submission-status messages</li>
-    <li>Page URL and platform name, only to detect whether the page is supported</li>
+    <li>Page URL and platform name, to detect supported pages and associate coaching requests and study records with the current problem</li>
   </ul>
 
   <p>
@@ -278,6 +282,27 @@ footer {
     CodeCoach does not sync full platform problem statements, saved code snapshots,
     or wrong-answer note bodies unless a future version explicitly discloses that behavior
     and requests the required permission or consent.
+  </p>
+
+  <h3>3.6 Guest quota and operational records</h3>
+  <p>
+    Starting the free trial creates an anonymous Firebase Authentication session; no email or
+    Google account is required for this session. Checking an existing trial may refresh its
+    authentication tokens and contact the CodeCoach backend without sending code or a question.
+    This authentication and quota traffic is separate from an AI request.
+  </p>
+  <p>
+    The guest backend stores the Firebase user ID, request counts, token and cost totals,
+    recent request identifiers for duplicate protection, and timestamps in Firestore.
+    It also stores daily request counters under a keyed hash derived from the request IP address,
+    and aggregate daily budget counters. A hashed guest identifier is sent to OpenAI for abuse
+    monitoring. These identifiers are pseudonymous, not a guarantee of anonymity.
+  </p>
+  <p>
+    Coaching questions, code, and responses are processed to complete the request and are not
+    written to the guest quota documents. Firebase / Google infrastructure may retain HTTP request
+    metadata, including IP addresses, and operational logs. The backend logs errors, which may
+    include upstream diagnostic messages; therefore this policy does not promise zero server logging.
   </p>
 
   <h2>4. Information CodeCoach does not collect</h2>
@@ -521,11 +546,11 @@ footer {
       </tr>
       <tr>
         <td>Optional Firebase cloud sync learning metadata</td>
-        <td>Until the user disables sync, deletes synced data where supported, requests deletion, or closes the account</td>
+        <td>Until deleted through supported controls or a deletion request. Disabling sync stops future synchronization but does not itself delete previously synchronized data.</td>
       </tr>
       <tr>
         <td>OpenAI API request data and guest quota records</td>
-        <td>OpenAI request data is handled according to OpenAI's applicable policies. Guest quota records are retained as needed to enforce free-use limits, abuse protection, cost controls, and legal or security requirements.</td>
+        <td>OpenAI request data is handled according to OpenAI's applicable policies. Guest quota records are retained for free-use limits, abuse protection, and cost controls; the current application does not implement automatic expiry of these records. Contact the developer to request deletion. Operational logs follow the configured Firebase / Google retention settings and applicable provider policies.</td>
       </tr>
     </tbody>
   </table>
@@ -544,6 +569,12 @@ footer {
   </p>
 
   <h2>14. User access, correction, deletion, and objection requests</h2>
+  <p>
+    Clearing local guest-session data or uninstalling the extension does not delete the anonymous
+    Firebase account or server-side quota records, and does not reset the free-use allowance.
+    Contact the developer for assistance deleting server-side records; we may need information
+    to locate and verify your session, but you should not send API keys or authentication tokens.
+  </p>
   <p>
     You may request access to, correction of, deletion of, or suspension of processing of
     developer-controlled data associated with your CodeCoach account by contacting the developer
@@ -585,11 +616,21 @@ footer {
     CodeCoach operates a Firebase backend for guest AI coaching. The guest backend validates
     structured coaching requests, enforces quota and cost limits, and forwards allowed requests
     to OpenAI. BYOK OpenAI requests continue to go directly from the extension to OpenAI.
-    If a future version adds persistent server logs, analytics SDKs, or additional processors,
-    this policy will be updated before or at the time those changes are released.
+    Guest quota records and operational logging are described in Section 3.6.
+    If a future version adds analytics SDKs or additional processors, this policy will be
+    updated before or at the time those changes are released.
   </p>
 
   <h2>17. AI feature disclosure</h2>
+  <p>
+    Inline coaching prompts can appear automatically inside the editor on supported pages,
+    without opening the side panel. The extension locally observes editor content, cursor position,
+    editing activity, and visible run or submission results to position the prompt and decide
+    when to offer help. Displaying an invitation to ask for a hint does not itself send the
+    editor content to OpenAI. Hide collapses the inline coach to a Show coach control;
+    reopening a saved hint does not make another AI request. Inline coaching can be disabled
+    in the extension settings.
+  </p>
   <p>
     CodeCoach does not automatically send your data to OpenAI merely because you visit a page.
     AI-related data is sent when you use an AI feature, such as asking a question, requesting a hint,
@@ -599,7 +640,17 @@ footer {
   <p>
     When you use an AI feature, the information sent to OpenAI is limited to what is needed
     to provide the requested response, such as your prompt, current code, selected text,
-    visible problem context, and relevant run or test-result messages.
+    visible problem context, relevant conversation history, saved code attempts when needed
+    for notes or comparisons, and relevant run or test-result messages. Inline coaching uses
+    the same BYOK or guest request paths as side-panel coaching.
+  </p>
+
+  <p>
+    AI requests use <code>store: false</code>. This is not a promise of zero retention:
+    OpenAI may retain data for abuse monitoring or other purposes permitted by its applicable
+    API policies and account settings. Your own API key is stored locally and is not uploaded
+    to the CodeCoach guest backend; the guest service uses a server-managed key.
+    See <a href="https://developers.openai.com/api/docs/guides/your-data" rel="noopener noreferrer">OpenAI API data controls</a>.
   </p>
 
   <p>
